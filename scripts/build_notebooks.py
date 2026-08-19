@@ -628,8 +628,8 @@ the fiscal calendar must arrive together.
 | Input | Source | Status |
 |---|---|---|
 | Eldsneyti (CP0722, ~3.5%) | Gasvaktin open data — every retail price change since 2016 | **live, calibrated** |
-| Flugfargjöld (CP07332, ~2.5%) | Icelandair/PLAY quotes | framework only (`airfares.py`) — needs a collection path |
-| Matvörur (CP011x, ~13.7%) | Krónan mirror (home_app Supabase) | pipeline ready (`groceries.py`) — history starts when snapshots begin |
+| Flugfargjöld (CP073, ~3.9%) | Icelandair KEF-origin lowest fares (SSR page parse) | **collecting** (`airfares.py`); calibration once ≥2 windows |
+| Matvörur (CP011x, ~13.7%) | Krónan mirror (home_app Supabase) | **collecting** (`groceries.py`); first m/m Sept 2026 |
 | Administered steps | `config/fiscal_calendar.yaml` | scaffolded; Jan-2026 steps realized & quantified |
 
 No placeholder data anywhere: pending sources return empty rather than synthetic numbers.
@@ -755,11 +755,32 @@ then builds a matched-model Jevons index per COICOP class (forward-fill reconstr
 category mapping defined). First usable m/m estimate: once the history spans two
 collection windows (September 2026).
 
-**Airfares (CP07332):** the single highest-variance input. `airfares.py` defines the
-quote-basket design (routes × booking offsets × collection window) and the index math,
-but collecting quotes needs either a fares API key or a headless-browser scraper —
-listed as the top follow-up. Until then CP073 stays model-driven, which is the dominant
-term in the h=1 error budget.
+**Airfares (CP073):** the single highest-variance input — now **collecting**. Icelandair's
+Icelandic-edition destination pages server-render their lowest KEF-origin ISK fares into
+the page HTML (`__NEXT_DATA__`), so `airfares.py` fetches a fixed 12-route set with a plain
+GET (Chrome TLS impersonation via `curl_cffi` clears Cloudflare — no API key, no CORS). A
+daily scheduled task (`VNV-airfare-collect`, self-limited to days 1–15) accumulates the
+panel; `calibrate_airfares()` activates the CP073 override once ≥2 collection windows and
+≥6 overlapping months exist. Until then CP073 stays model-driven — still the dominant term
+in the h=1 error budget, but the data to fix it is now being logged.
+
+Today's collected fares (lowest KEF→dest, ISK):
+"""),
+("code", '''\
+from vnv import airfares
+q = airfares.load_quotes()
+if q.empty:
+    print("no quotes yet")
+else:
+    show = q[["dest", "flight_type", "depart_date", "return_date", "fare_isk"]].copy()
+    display(show.sort_values("fare_isk").reset_index(drop=True))
+    print("airfare index:", "calibration pending (need ≥2 collection windows)"
+          if airfares.airfare_index_mm().empty else airfares.airfare_index_mm().round(2).to_dict())
+'''),
+("md", """\
+The scraped fares confirm the mechanism end to end: real KEF-origin ISK prices for a fixed
+route basket, collected daily. One month of collection makes the airfare leg live —
+addressing the plan's top-ranked variance source.
 """),
 ("code", '''\
 from vnv import groceries, airfares

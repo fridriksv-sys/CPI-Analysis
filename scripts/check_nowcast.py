@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 pd.set_option("display.width", 220)
-from vnv import ingest, models, nowcast
+from vnv import airfares, ingest, models, nowcast
 
 spl = ingest.load_sub_spliced()
 new = ingest.load_sub_new()
@@ -23,6 +23,11 @@ print("components:", len(models.COMPONENTS), " weight sum:", round(w0.sum(), 2))
 cal = nowcast.calibrate_fuel()
 print(f"fuel calibration: alpha={cal.alpha:+.3f} beta={cal.beta:.3f} "
       f"resid_sd={cal.resid_sd:.3f}pp n={cal.n_obs}")
+acal = nowcast.calibrate_airfares()
+print("airfare calibration:", "PENDING (need >=2 collection windows)" if acal is None
+      else f"beta={acal.beta:.3f} n={acal.n_obs}")
+print("airfare scraped index:", "empty" if airfares.airfare_index_mm().empty
+      else airfares.airfare_index_mm().to_dict())
 
 # current-month nowcast
 fits = {c: models.fit_component(g[c], c) for c in models.COMPONENTS}

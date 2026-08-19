@@ -9,3 +9,5 @@ nbformat
 nbclient
 lxml
 beautifulsoup4
+curl_cffi
+streamlit

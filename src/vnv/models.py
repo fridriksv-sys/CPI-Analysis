@@ -30,7 +30,9 @@ COMPONENTS = [
 ]
 
 # Components whose m/m can be OBSERVED (scraped) rather than modeled by mid-month.
-OBSERVABLE = {"CP0722"}  # fuel via Gasvaktin; airfares (CP0733) pending scraper
+# CP0722 fuel is live; CP073 airfares collect now, override activates once
+# calibrated (>= 2 collection windows).
+OBSERVABLE = {"CP0722", "CP073"}
 
 RENT_CODE = "CP042"
 RENT_BREAK = pd.Period("2024-07", "M")  # first m/m fully under rental equivalence

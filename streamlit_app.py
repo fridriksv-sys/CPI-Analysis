@@ -209,8 +209,9 @@ with tab_feed:
         ("Matvörur — Krónan (kronan_price_history í Supabase)", "🟡 söfnun hafin",
          f"{n_snap} raðir í staðbundnu afriti — keyra scripts/export_kronan_history.py; "
          "kvörðun þegar saga spannar ≥2 söfnunarglugga"),
-        ("Flugfargjöld", "🔴 vantar gagnalind",
-         f"{n_quotes} verðtilboð skráð — sjá src/vnv/airfares.py"),
+        ("Flugfargjöld — Icelandair (KEF, ISK)", "🟡 söfnun hafin",
+         f"{n_quotes} fargjöld skráð í dag; dagleg söfnun (1.–15.); "
+         "kvörðun þegar saga spannar ≥2 söfnunarglugga"),
         ("Fjármálaalmanak", "🟡 handvirkt", "config/fiscal_calendar.yaml"),
     ]
     st.dataframe(pd.DataFrame(rows, columns=["Lind", "Staða", "Athugasemd"]),
