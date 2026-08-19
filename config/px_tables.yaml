@@ -1,0 +1,78 @@
+# Discovered from the PxWeb API directory tree by px_client.discover_tables().
+# This file is a LOG of what was found, not an input - discovery runs live.
+VIS01000:
+  path: 1_vnv/1_vnv/VIS01000.px
+  title: Vísitala neysluverðs og breytingar, grunnur 1988=100
+  updated: '2026-07-23T09:00:03'
+VIS01002:
+  path: 1_vnv/1_vnv/VIS01002.px
+  title: Vísitala neysluverðs, tímaraðir á eldri grunnum
+  updated: '2026-07-23T09:00:03'
+VIS01004:
+  path: 1_vnv/1_vnv/VIS01004.px
+  title: Vísitölur til verðtryggingar
+  updated: '2026-07-23T09:00:03'
+VIS01005:
+  path: 1_vnv/1_vnv/VIS01005.px
+  title: Vísitala neysluverðs, ársmeðaltöl
+  updated: '2026-01-29T09:00:07'
+VIS01101:
+  path: 1_vnv/3_greiningarvisitolur/VIS01101.px
+  title: Vísitala neysluverðs eftir eðli og uppruna
+  updated: '2026-07-23T09:00:03'
+VIS01102:
+  path: 1_vnv/4_eldraefni/VIS01102.px
+  title: Vísitala neysluverðs eftir eðli og uppruna frá 1997-2025
+  updated: '2026-01-08T09:12:32'
+VIS01103:
+  path: 1_vnv/3_greiningarvisitolur/VIS01103.px
+  title: Fastskattavísitala neysluverðs
+  updated: '2026-07-23T09:00:03'
+VIS01104:
+  path: 1_vnv/4_eldraefni/VIS01104.px
+  title: Fastskattavísitala neysluverðs frá 2007-2025
+  updated: '2026-01-08T09:12:32'
+VIS01106:
+  path: 1_vnv/3_greiningarvisitolur/VIS01106.px
+  title: Vísitala markaðsverðs íbúðarhúsnæðis
+  updated: '2026-07-23T09:00:03'
+VIS01300:
+  path: 1_vnv/2_undirvisitolur/VIS01300.px
+  title: Undirvísitölur, breytingar og áhrif
+  updated: '2026-07-23T09:00:03'
+VIS01301:
+  path: 1_vnv/4_eldraefni/VIS01301.px
+  title: Hlutfallsleg skipting og áhrifaþættir vísitölu neysluverðs frá 2002-2025
+  updated: '2026-01-08T09:12:32'
+VIS01303:
+  path: 1_vnv/4_eldraefni/VIS01303.px
+  title: Vísitala neysluverðs, undirvísitölur frá 2002-2019
+  updated: '2020-10-06T16:03:30'
+VIS01304:
+  path: 1_vnv/4_eldraefni/VIS01304.px
+  title: Undirvísitölur neysluverðs, grunnur 2008=100 frá 2008-2025
+  updated: '2026-01-08T09:12:32'
+VIS01305:
+  path: 1_vnv/4_eldraefni/VIS01305.px
+  title: Vogir fyrir undirvísitölur neysluverðs frá 1992-2024
+  updated: '2026-01-08T09:12:32'
+VIS01306:
+  path: 1_vnv/2_undirvisitolur/VIS01306.px
+  title: Vogir fyrir undirvísitölur neysluverðs
+  updated: '2026-07-23T09:00:03'
+VIS01308:
+  path: 1_vnv/2_undirvisitolur/VIS01308.px
+  title: Undirvísitölur tengdar við eldra flokkunarkerfi
+  updated: '2026-07-23T09:00:03'
+VIS01503:
+  path: 1_vnv/4_eldraefni/VIS01503.px
+  title: Vísitala neysluverðs, undirvísitölur frá 1992-2002
+  updated: '2020-10-06T16:03:30'
+VIS01504:
+  path: 1_vnv/4_eldraefni/VIS01504.px
+  title: Vísitala húsnæðiskostnaðar (húsaleiguvísitala) 1968-1983
+  updated: '2020-10-06T16:03:30'
+VIS01505:
+  path: 1_vnv/4_eldraefni/VIS01505.px
+  title: Verðbótahækkun húsaleigu 1983-1999
+  updated: '2020-10-06T16:03:30'

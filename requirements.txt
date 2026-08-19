@@ -1,0 +1,11 @@
+﻿pandas
+requests
+numpy
+matplotlib
+statsmodels
+pyyaml
+jupyter
+nbformat
+nbclient
+lxml
+beautifulsoup4

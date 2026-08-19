@@ -1,0 +1,59 @@
+# VNV forecast model (Icelandic CPI)
+
+Bottom-up forecast of the vísitala neysluverðs (VNV): every component is
+forecast separately and aggregated with Hagstofa's published, price-updated
+weights through a reconstruction engine verified against every published month.
+
+Built from `PLAN_1.md` (see `PLAN.md`). Phases 1–2 complete and gated; the
+forecast layer is the v0 baseline of Phase 5.
+
+## Read this first — the notebooks
+
+| Notebook | What it shows |
+|---|---|
+| `notebooks/01_data_and_weights.ipynb` | All data straight from the PxWeb API; **the weights used to predict the CPI** (basket vogir vs monthly price-updated Vægi); anchor checks against press-release figures |
+| `notebooks/02_reconstruction_check.ipynb` | **The hard gate**: the published headline is rebuilt from components for every month 2019–2026, chain-link months included, plus a negative control proving the check has teeth |
+| `notebooks/03_forecast.ipynb` | 12-month forecast: per-component models with visible parameters, weight × m/m contribution tables, bootstrap fan chart, verðtrygging (t+2) path, honest walk-forward backtest |
+
+Notebooks are committed **with outputs** so they read like a report. To re-run:
+
+```
+.venv\Scripts\python -m jupyter lab notebooks
+```
+
+Data is cached in `data/raw/` (git-ignored); delete the cache to force fresh
+API fetches. `scripts/build_notebooks.py` regenerates and re-executes all
+three notebooks from source.
+
+## Layout
+
+```
+src/vnv/
+  px_client.py     PxWeb API client: discovery, fetching, chunking, caching
+  ingest.py        table -> tidy DataFrame loaders (VIS01000/01004/01300/01301/01306/01308)
+  reconstruct.py   Laspeyres reconstruction + chain-link handling + rounding budgets
+  models.py        v0 component models, aggregation, bootstrap fan chart
+scripts/           runnable checks (each mirrors a notebook section) + notebook builder
+config/px_tables.yaml   table IDs discovered from the API (log, not input)
+```
+
+## Key domain facts encoded (from PLAN_1.md)
+
+- Published monthly **Vægi %** is the price-updated value share; contribution
+  identity: m/m = Σ vægi(t−1) × change(t). At base changes (April ≤2024,
+  January ≥2025) vægi(t−1) belongs to the old basket — de-updating vægi(t) by
+  the component's own change handles all months with one formula.
+- **Reiknuð húsaleiga** switched to rental equivalence June 2024: modeled on
+  post-break sample only.
+- COICOP2018 from January 2026; `VIS01308` is Hagstofa's own splice to 1997 —
+  no home-made bridging.
+- The API stores 1dp indices / 2dp weights & changes: all reconstruction
+  tolerances are rounding-aware (the plan's <0.005pp is below the information
+  content of the published data).
+- VNV of month t settles verðtrygging in month t+2 (verified in notebook 03).
+
+## Not yet built (Phases 3–7)
+
+Airfare/fuel/grocery scrapers matched to the collection window, fiscal & wage
+calendars, HMS rent distributed-lag model, BVAR + MinT reconciliation,
+analyst/breakeven benchmark table.
