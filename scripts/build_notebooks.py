@@ -747,11 +747,13 @@ tbl.sort_values("framlag (pp)", ascending=False)
 ## Pending observables — status, not placeholders
 
 **Groceries (CP011x):** the Krónan catalog mirror (8,295 SKUs, built for home_app) holds
-current prices only. History accumulates via daily snapshots; `groceries.py` then builds
-a matched-model Jevons index per COICOP class with the category mapping already defined.
-Two feed options (owner decision): the server-side snapshot table + pg_cron
-(`scripts/kronan_history_migration.sql`, not applied) or the local scraper
-(`scripts/snapshot_kronan.py`, needs `KRONAN_API_TOKEN`).
+current prices only, so a change-log history table (`kronan_price_history`) now
+accumulates in the home_app Supabase project — **applied 2026-08-19**, seeded with 4,413
+SKUs, pg_cron daily at 08:30 UTC during collection-window days 1–15 only, storing only
+rows whose price changed. Export with `scripts/export_kronan_history.py`; `groceries.py`
+then builds a matched-model Jevons index per COICOP class (forward-fill reconstruction,
+category mapping defined). First usable m/m estimate: once the history spans two
+collection windows (September 2026).
 
 **Airfares (CP07332):** the single highest-variance input. `airfares.py` defines the
 quote-basket design (routes × booking offsets × collection window) and the index math,

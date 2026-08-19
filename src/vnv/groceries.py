@@ -51,17 +51,34 @@ CATEGORY_TO_COICOP = {
 
 
 def load_snapshots() -> pd.DataFrame:
-    """All local snapshots as one frame (snapshot_date, sku, price, category_path)."""
-    if not SNAP_DIR.exists():
-        return pd.DataFrame(columns=["snapshot_date", "sku", "price", "category_path"])
+    """Local price history as one frame (snapshot_date, sku, price, category_path).
+
+    Reads data/kronan/history.csv (export of the server-side kronan_price_history
+    change-log; see scripts/export_kronan_history.py) plus any snapshot_*.csv
+    files from the local scraper. Change-log semantics: a (date, sku) row means
+    the price CHANGED that day; prices between rows are reconstructed by
+    forward-fill in daily_prices().
+    """
     frames = []
-    for f in sorted(SNAP_DIR.glob("snapshot_*.csv")):
-        df = pd.read_csv(f, encoding="utf-8")
-        df["snapshot_date"] = pd.to_datetime(f.stem.replace("snapshot_", ""))
+    hist = SNAP_DIR / "history.csv"
+    if hist.exists():
+        df = pd.read_csv(hist, encoding="utf-8", parse_dates=["snapshot_date"])
         frames.append(df)
+    if SNAP_DIR.exists():
+        for f in sorted(SNAP_DIR.glob("snapshot_*.csv")):
+            df = pd.read_csv(f, encoding="utf-8")
+            df["snapshot_date"] = pd.to_datetime(f.stem.replace("snapshot_", ""))
+            frames.append(df)
     if not frames:
         return pd.DataFrame(columns=["snapshot_date", "sku", "price", "category_path"])
-    return pd.concat(frames, ignore_index=True)
+    return pd.concat(frames, ignore_index=True).drop_duplicates(["snapshot_date", "sku"])
+
+
+def daily_prices(snaps: pd.DataFrame) -> pd.DataFrame:
+    """sku x day price matrix, forward-filled between stored change rows."""
+    piv = snaps.pivot_table(index="snapshot_date", columns="sku", values="price", aggfunc="last")
+    full = pd.date_range(piv.index.min(), pd.Timestamp.today().normalize(), freq="D")
+    return piv.reindex(full).ffill()
 
 
 def _coicop_class(category_path: str) -> str | None:
@@ -70,38 +87,35 @@ def _coicop_class(category_path: str) -> str | None:
 
 
 def food_index_mm(collection_day_to: int = 15) -> pd.DataFrame:
-    """Matched-model m/m per COICOP class from the snapshot history.
+    """Matched-model m/m per COICOP class from the price history.
 
-    Within class: Jevons (geometric mean of price relatives of SKUs present in
-    both months' collection windows). Month price = mean over snapshots with
-    day <= collection_day_to (Hagstofa collection window).
-    Returns empty frame until enough snapshots exist - never synthesizes.
+    Month price per SKU = mean of the forward-filled daily price over the
+    collection window (days 1..collection_day_to), matching Hagstofa's method.
+    Within class: Jevons (geometric mean of price relatives of SKUs priced in
+    both consecutive windows). Returns an empty frame until the history spans
+    at least two collection windows - never synthesizes.
     """
     snaps = load_snapshots()
     if snaps.empty:
         return pd.DataFrame()
     snaps = snaps.dropna(subset=["price"])
-    snaps["coicop"] = snaps["category_path"].map(_coicop_class)
-    snaps = snaps.dropna(subset=["coicop"])
-    snaps = snaps[snaps.snapshot_date.dt.day <= collection_day_to]
-    snaps["manudur"] = snaps.snapshot_date.dt.to_period("M")
-
-    monthly = (
-        snaps.groupby(["coicop", "sku", "manudur"], as_index=False)
-        .agg(price=("price", "mean"))
+    coicop = (
+        snaps.sort_values("snapshot_date")
+        .groupby("sku")["category_path"].last().map(_coicop_class).dropna()
     )
-    out = []
-    for (coicop, sku), grp in monthly.groupby(["coicop", "sku"]):
-        s = grp.set_index("manudur").price.sort_index()
-        rel = np.log(s / s.shift(1))
-        for m, v in rel.dropna().items():
-            out.append({"coicop": coicop, "sku": sku, "manudur": m, "log_rel": v})
-    if not out:
+    daily = daily_prices(snaps)
+    window = daily[daily.index.day <= collection_day_to]
+    monthly = window.groupby(window.index.to_period("M")).mean()
+    if len(monthly) < 2:
         return pd.DataFrame()
-    rels = pd.DataFrame(out)
-    idx = (
-        rels.groupby(["coicop", "manudur"])
-        .agg(mm=("log_rel", lambda v: (np.exp(v.mean()) - 1) * 100), n_matched=("sku", "count"))
-        .reset_index()
-    )
-    return idx
+
+    log_rel = np.log(monthly / monthly.shift(1))
+    out = []
+    for m, row in log_rel.iloc[1:].iterrows():
+        rel = row.dropna()
+        rel = rel[rel.index.isin(coicop.index)]
+        grp = rel.groupby(coicop.reindex(rel.index))
+        for cls, vals in grp:
+            out.append({"coicop": cls, "manudur": m,
+                        "mm": (np.exp(vals.mean()) - 1) * 100, "n_matched": len(vals)})
+    return pd.DataFrame(out)

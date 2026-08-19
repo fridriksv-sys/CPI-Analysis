@@ -22,6 +22,18 @@ Notebooks are committed **with outputs** so they read like a report. To re-run:
 .venv\Scripts\python -m jupyter lab notebooks
 ```
 
+## Dashboard
+
+```
+.venv\Scripts\python -m streamlit run streamlit_app.py
+```
+
+Five tabs: **Núspá** (current-month nowcast with observed-vs-model source per
+component, live pump prices), **12 mánaða spá** (fan chart, contributions,
+verðtrygging path), **Vogir** (the weights), **Endurbygging** (live gate
+status), **Gagnalindir** (feed status + fuel calibration). Same `src/vnv` code
+as the notebooks; Hagstofa data cached 1 hour.
+
 Data is cached in `data/raw/` (git-ignored); delete the cache to force fresh
 API fetches. `scripts/build_notebooks.py` regenerates and re-executes all
 three notebooks from source.
@@ -57,11 +69,12 @@ config/px_tables.yaml   table IDs discovered from the API (log, not input)
 
 - **Fuel** — live: Gasvaktin history (2016–) calibrated onto CP0722; the h=1
   nowcast reads today's pump prices (`vnv/fuel.py`, `vnv/nowcast.py`).
-- **Groceries** — pipeline ready (`vnv/groceries.py`); price history must
-  accumulate first. Feed options: apply
-  `scripts/kronan_history_migration.sql` in the home_app Supabase project
-  (preferred), or run `scripts/snapshot_kronan.py` daily with
-  `KRONAN_API_TOKEN` set.
+- **Groceries** — collecting: `kronan_price_history` change-log table + pg_cron
+  (daily 08:30 UTC, days 1–15 only) applied in the home_app Supabase project
+  2026-08-19, seeded with 4,413 SKUs. Export via
+  `scripts/export_kronan_history.py` (needs SUPABASE_URL + service key), then
+  `vnv/groceries.py` builds the matched-model food index. First usable m/m:
+  September 2026.
 - **Airfares** — framework only (`vnv/airfares.py`): quote-basket design and
   index math defined; needs a collection path (fares API key, browser scraper,
   or manual weekly quotes). The binding constraint on h=1 accuracy.
