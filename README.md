@@ -14,6 +14,7 @@ forecast layer is the v0 baseline of Phase 5.
 | `notebooks/01_data_and_weights.ipynb` | All data straight from the PxWeb API; **the weights used to predict the CPI** (basket vogir vs monthly price-updated Vægi); anchor checks against press-release figures |
 | `notebooks/02_reconstruction_check.ipynb` | **The hard gate**: the published headline is rebuilt from components for every month 2019–2026, chain-link months included, plus a negative control proving the check has teeth |
 | `notebooks/03_forecast.ipynb` | 12-month forecast: per-component models with visible parameters, weight × m/m contribution tables, bootstrap fan chart, verðtrygging (t+2) path, honest walk-forward backtest |
+| `notebooks/04_nowcast.ipynb` | Phase 3 observables: Gasvaktin fuel calibration (2016–, R²≈0.84) feeding CP0722; the January-2026 lesson (fuel observed correctly, km-charge missed → fiscal calendar); status of pending grocery/airfare feeds |
 
 Notebooks are committed **with outputs** so they read like a report. To re-run:
 
@@ -52,8 +53,22 @@ config/px_tables.yaml   table IDs discovered from the API (log, not input)
   content of the published data).
 - VNV of month t settles verðtrygging in month t+2 (verified in notebook 03).
 
-## Not yet built (Phases 3–7)
+## Phase 3 status
 
-Airfare/fuel/grocery scrapers matched to the collection window, fiscal & wage
-calendars, HMS rent distributed-lag model, BVAR + MinT reconciliation,
-analyst/breakeven benchmark table.
+- **Fuel** — live: Gasvaktin history (2016–) calibrated onto CP0722; the h=1
+  nowcast reads today's pump prices (`vnv/fuel.py`, `vnv/nowcast.py`).
+- **Groceries** — pipeline ready (`vnv/groceries.py`); price history must
+  accumulate first. Feed options: apply
+  `scripts/kronan_history_migration.sql` in the home_app Supabase project
+  (preferred), or run `scripts/snapshot_kronan.py` daily with
+  `KRONAN_API_TOKEN` set.
+- **Airfares** — framework only (`vnv/airfares.py`): quote-basket design and
+  index math defined; needs a collection path (fares API key, browser scraper,
+  or manual weekly quotes). The binding constraint on h=1 accuracy.
+- **Fiscal calendar** — `config/fiscal_calendar.yaml`; Jan-2026 steps realized
+  and quantified from published data.
+
+## Not yet built (Phases 4–7)
+
+HMS rent distributed-lag model, wage calendar + ARDL blocks, BVAR + MinT
+reconciliation, analyst/breakeven benchmark table.

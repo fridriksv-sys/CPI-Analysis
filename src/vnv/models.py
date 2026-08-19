@@ -19,12 +19,18 @@ import numpy as np
 import pandas as pd
 
 # Forecast components: 13 COICOP2018 divisions with housing (CP04) split into
-# its groups so reiknud husaleiga is modeled on its own regime.
+# its groups so reiknud husaleiga is modeled on its own regime, and transport
+# (CP07) split so eldsneyti (CP0722) can take the observable fuel nowcast.
 COMPONENTS = [
     "CP01", "CP02", "CP03",
     "CP041", "CP042", "CP043", "CP044", "CP045",
-    "CP05", "CP06", "CP07", "CP08", "CP09", "CP10", "CP11", "CP12", "CP13",
+    "CP05", "CP06",
+    "CP071", "CP0721", "CP0722", "CP0723", "CP0724", "CP073", "CP074",
+    "CP08", "CP09", "CP10", "CP11", "CP12", "CP13",
 ]
+
+# Components whose m/m can be OBSERVED (scraped) rather than modeled by mid-month.
+OBSERVABLE = {"CP0722"}  # fuel via Gasvaktin; airfares (CP0733) pending scraper
 
 RENT_CODE = "CP042"
 RENT_BREAK = pd.Period("2024-07", "M")  # first m/m fully under rental equivalence
@@ -38,7 +44,7 @@ DEFAULT_SAMPLE_START = pd.Period("2016-01", "M")
 # Phase 5 refinement.
 OLD_PROXY = {
     "CP043": "IS043",  # vidhald husnaedis
-    "CP07": "IS07",    # flutningar
+    "CP074": "IS07",   # voruflutningar (0.13% weight; division proxy is fine)
     "CP08": "IS08",    # fjarskipti (old) ~ upplysingar og fjarskipti (new)
     "CP09": "IS09",    # tomstundir ~ afthreying/ithrottir/menning
     "CP10": "IS10",    # menntun

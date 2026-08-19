@@ -1,0 +1,50 @@
+# Dated administered-price and tax steps affecting VNV subindices.
+# status: enacted   = documented in PLAN.md or law, date and direction known
+#         verify    = entry needs a primary source (fjarlog, tariff schedule)
+# Impacts in pp on the affected SUBINDEX (not headline) where known; null = not
+# yet quantified. NO GUESSED MAGNITUDES - quantify from primary sources only.
+
+- date: 2026-01
+  name: oliugjald og vorugjold a eldsneyti afnumin
+  affects: [CP0722]
+  direction: down
+  impact_pp: null
+  status: enacted        # PLAN.md 1.4
+  note: pump prices fell sharply in Jan 2026; captured by the fuel scraper directly
+
+- date: 2026-01
+  name: kolefnisgjald haekkad
+  affects: [CP0722, CP0451]
+  direction: up
+  impact_pp: null
+  status: enacted        # PLAN.md 1.4
+
+- date: 2026-01
+  name: kilometragjald a oll okutaeki
+  affects: [CP0724]      # landed in 0724 "onnur thjonusta tengd farartaekjum"
+  direction: up
+  impact_pp: null
+  status: realized       # published Jan-2026: CP0724 m/m +134.08%, ahrif +1.01pp
+  note: confirmed from VIS01300 - a usage levy, not a pump-price component
+
+- date: 2026-01
+  name: vorugjold okutaekja breytt, ivilnun rafbila skert
+  affects: [CP071]
+  direction: up
+  impact_pp: null
+  status: realized       # published Jan-2026: CP071 m/m +12.26%, ahrif +0.55pp
+
+# --- recurring January pattern (populate each year from fjarlog) -------------
+- date: 2027-01
+  name: kronutolugjol fjarlaga 2027 (afengisgjald, tobaksgjald, kolefnisgjald, km-gjald)
+  affects: [CP021, CP022, CP0722, CP0724]
+  direction: up
+  impact_pp: null
+  status: verify         # fjarlagafrumvarp published in September - fill in then
+
+- date: 2027-01
+  name: gjaldskrar sveitarfelaga og veitna (hiti, rafmagn, sorp, leikskoli)
+  affects: [CP0451, CP0455, CP044, CP10]
+  direction: up
+  impact_pp: null
+  status: verify         # municipal budgets adopted in December

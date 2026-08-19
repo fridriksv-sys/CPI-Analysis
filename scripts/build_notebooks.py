@@ -159,16 +159,18 @@ plt.tight_layout(); plt.show()
 ("md", """\
 ## Forecast components
 
-The model works at division level with housing (CP04) split into its groups, so that
-**reiknuð húsaleiga (CP042)** — the largest single component and the one with the
-June-2024 methodology break — is modeled on its own regime.
+The model works at division level with two divisions split into groups: housing (CP04),
+so that **reiknuð húsaleiga (CP042)** — the largest single component, with the June-2024
+methodology break — is modeled on its own regime; and transport (CP07), so that
+**eldsneyti (CP0722)** can take the observable fuel nowcast (notebook 04).
 """),
 ("code", '''\
 from vnv import models
 
 comp = latest.loc[models.COMPONENTS, ["heiti", "vaegi"]].rename(columns={"vaegi": f"vægi {last_m} (%)"})
 assert abs(comp.iloc[:, 1].sum() - 100) < 0.05, "component weights must partition the basket"
-print("component weights sum:", comp.iloc[:, 1].sum().round(2), "(17 non-overlapping components)")
+print(f"component weights sum: {comp.iloc[:, 1].sum().round(2)} "
+      f"({len(models.COMPONENTS)} non-overlapping components)")
 comp.round(2)
 '''),
 ("md", """\
@@ -421,7 +423,7 @@ nb3 = [
 ("md", """\
 # 03 — Spá (the forecast)
 
-**What this is.** A bottom-up 12-month forecast of VNV: each of 17 components gets a
+**What this is.** A bottom-up 12-month forecast of VNV: each of 23 components gets a
 transparent m/m model, and the paths are aggregated with the **latest published weights,
 price-updated through the horizon** by the engine verified in notebook 02.
 
@@ -612,11 +614,186 @@ inflation (RIKS vs RIKB) — that comparison needs Seðlabanki market data (Phas
 """),
 ]
 
+# ============================================================================
+# Notebook 4 — observable-input nowcast (Phase 3)
+# ============================================================================
+nb4 = [
+("md", """\
+# 04 — Mælanlegt í stað spáðs (the observable-input nowcast, Phase 3)
+
+By mid-month a share of the basket is **observable rather than forecastable**. This
+notebook wires in the first observable — fuel — and shows exactly why observables and
+the fiscal calendar must arrive together.
+
+| Input | Source | Status |
+|---|---|---|
+| Eldsneyti (CP0722, ~3.5%) | Gasvaktin open data — every retail price change since 2016 | **live, calibrated** |
+| Flugfargjöld (CP07332, ~2.5%) | Icelandair/PLAY quotes | framework only (`airfares.py`) — needs a collection path |
+| Matvörur (CP011x, ~13.7%) | Krónan mirror (home_app Supabase) | pipeline ready (`groceries.py`) — history starts when snapshots begin |
+| Administered steps | `config/fiscal_calendar.yaml` | scaffolded; Jan-2026 steps realized & quantified |
+
+No placeholder data anywhere: pending sources return empty rather than synthetic numbers.
+"""),
+("code", BOOTSTRAP),
+("code", '''\
+from vnv import ingest, models, nowcast, fuel
+
+head = ingest.load_headline()
+sub_new = ingest.load_sub_new()
+panel_old = ingest.load_panel_old()
+spliced = ingest.load_sub_spliced()
+g = models.build_component_history(spliced, panel_old, sub_new)
+last_m = g.index.max()
+'''),
+("md", """\
+## Fuel: ten years of pump prices vs the published subindex
+
+Gasvaktin logs every verified pump-price change per retailer. We average list prices
+across retailers (Costco excluded — not in Hagstofa's outlet set), take the mean over
+the collection window (days 1–15), and regress the published subindex m/m on it.
+"""),
+("code", '''\
+bensin = fuel.scraped_mm("bensin95")
+diesel = fuel.scraped_mm("diesel")
+mix = (2/3) * bensin + (1/3) * diesel
+pub_e = panel_old[panel_old.code == "IS0722"].set_index("manudur").manadarbreyting
+
+cal = nowcast.calibrate_fuel()
+print(f"calibration (2016–2025, ex 2026-01/02): n={cal.n_obs}   "
+      f"published = {cal.alpha:+.3f} + {cal.beta:.3f} × scraped   resid SD = {cal.resid_sd:.2f}pp")
+print(f"error budget at ~3.5% weight: {cal.resid_sd * 0.035:.3f}pp on the headline")
+
+df = pd.concat([mix.rename("scraped"), pub_e.rename("published")], axis=1).dropna()
+fig, ax = plt.subplots(figsize=(7.5, 6))
+ax.scatter(df.scraped, df.published, s=18, color=C["blue"], alpha=0.6)
+lims = np.array([df.min().min() - 1, df.max().max() + 1])
+ax.plot(lims, cal.alpha + cal.beta * lims, color=C["orange"], lw=2)
+jan = df.loc[[pd.Period("2026-01", "M")]] if pd.Period("2026-01", "M") in df.index else None
+if jan is not None:
+    ax.scatter(jan.scraped, jan.published, s=60, color=C["red"], zorder=5)
+    ax.annotate("jan 2026\\n(skattabreyting)", xy=(jan.scraped.iloc[0], jan.published.iloc[0]),
+                xytext=(8, 8), textcoords="offset points", fontsize=9, color=C["red"])
+ax.set_xlabel("scraped: söfnunarglugga-meðaltal, m/m %")
+ax.set_ylabel("published: IS0722 eldsneyti, m/m %")
+ax.set_title("Dæluverð (Gasvaktin) spannar eldsneytisliðinn — 2016–2025")
+plt.show()
+'''),
+("md", """\
+## The January-2026 lesson: observables and the fiscal calendar are a pair
+
+Backtest h=1 with and without the fuel observable. In normal months the observable
+helps. In January 2026 it makes the forecast **worse** — not because the fuel reading
+was wrong (it nailed the −26% fall, áhrif −0.94pp) but because the same reform package
+introduced the kílómetragjald (CP0724: **+134% m/m, +1.01pp**) and cut the EV subsidy
+(CP071: +12.3%, +0.55pp), which the model had no way to see. Observing one leg of a
+fiscal package without booking the others is worse than observing neither.
+Those steps now live in `config/fiscal_calendar.yaml`.
+"""),
+("code", '''\
+rows = []
+for m in [m for m in g.index if m > pd.Period("2025-01", "M")]:
+    g_tr = g[g.index < m]
+    w_prev = sub_new[(sub_new.manudur == m - 1) & sub_new.code.isin(models.COMPONENTS)]
+    w_prev = w_prev.set_index("code").vaegi
+    if len(w_prev) < len(models.COMPONENTS):
+        continue
+    f = {c: models.forecast_component(models.fit_component(g_tr[c], c), m - 1, 1).iloc[0]
+         for c in models.COMPONENTS}
+    fmm = pd.DataFrame([f], index=[m])
+    hm, _, _ = models.aggregate_bottom_up(fmm, w_prev)
+    cal_m = nowcast.calibrate_fuel(train_end=m - 1)
+    fmm_o = nowcast.apply_observables(fmm, nowcast.fuel_nowcast(m, cal_m))
+    hmo, _, _ = models.aggregate_bottom_up(fmm_o, w_prev)
+    rows.append({"manudur": m, "model": hm.iloc[0], "model+fuel": hmo.iloc[0],
+                 "actual": head[("CPI", "change_M")].get(m, np.nan)})
+bt = pd.DataFrame(rows).set_index("manudur").dropna()
+
+def rmse(c, frame):
+    return np.sqrt(((frame[c] - frame.actual) ** 2).mean())
+
+ex_jan = bt.drop(pd.Period("2026-01", "M"))
+stats = pd.DataFrame({
+    "RMSE all": {c: rmse(c, bt) for c in ["model", "model+fuel"]},
+    "RMSE ex jan-2026": {c: rmse(c, ex_jan) for c in ["model", "model+fuel"]},
+})
+display(bt.round(3))
+stats.round(3)
+'''),
+("md", "## Today's nowcast (partial collection window)"),
+("code", '''\
+target = last_m + 1
+fits = {c: models.fit_component(g[c], c) for c in models.COMPONENTS}
+fc1 = pd.DataFrame({c: models.forecast_component(fits[c], last_m, 1) for c in models.COMPONENTS})
+obs = nowcast.fuel_nowcast(target, cal)
+fc1_obs = nowcast.apply_observables(fc1, obs)
+
+latest = sub_new[sub_new.manudur == last_m].set_index("code")
+w0 = latest.loc[models.COMPONENTS, "vaegi"]
+hm, contribs, _ = models.aggregate_bottom_up(fc1_obs, w0)
+
+tbl = pd.DataFrame({
+    "heiti": latest.loc[models.COMPONENTS, "heiti"].str.slice(0, 40),
+    "vægi (%)": w0.round(2),
+    "m/m spá (%)": fc1_obs.iloc[0].round(2),
+    "framlag (pp)": contribs.iloc[0].round(3),
+    "uppruni": ["mælt (Gasvaktin)" if c in obs else "líkan" for c in models.COMPONENTS],
+})
+print(f"h=1 nowcast for {target}: {hm.iloc[0]:+.2f}% m/m "
+      f"(fuel observed at {obs['CP0722']:+.2f}%)")
+print("NB: collection window still open — fuel reading updates daily until the 15th.")
+tbl.sort_values("framlag (pp)", ascending=False)
+'''),
+("md", """\
+## Pending observables — status, not placeholders
+
+**Groceries (CP011x):** the Krónan catalog mirror (8,295 SKUs, built for home_app) holds
+current prices only. History accumulates via daily snapshots; `groceries.py` then builds
+a matched-model Jevons index per COICOP class with the category mapping already defined.
+Two feed options (owner decision): the server-side snapshot table + pg_cron
+(`scripts/kronan_history_migration.sql`, not applied) or the local scraper
+(`scripts/snapshot_kronan.py`, needs `KRONAN_API_TOKEN`).
+
+**Airfares (CP07332):** the single highest-variance input. `airfares.py` defines the
+quote-basket design (routes × booking offsets × collection window) and the index math,
+but collecting quotes needs either a fares API key or a headless-browser scraper —
+listed as the top follow-up. Until then CP073 stays model-driven, which is the dominant
+term in the h=1 error budget.
+"""),
+("code", '''\
+from vnv import groceries, airfares
+print("grocery snapshots on disk:", len(list(groceries.SNAP_DIR.glob('snapshot_*.csv'))
+      if groceries.SNAP_DIR.exists() else []))
+print("grocery food index:", "EMPTY - awaiting snapshots" if groceries.food_index_mm().empty
+      else "data available")
+print("airfare quotes on disk:", len(airfares.load_quotes()), "-> index:",
+      "EMPTY - awaiting quotes" if airfares.airfare_index_mm().empty else "data available")
+
+import yaml
+cal_steps = yaml.safe_load(open(ROOT / "config" / "fiscal_calendar.yaml", encoding="utf-8"))
+pd.DataFrame(cal_steps)[["date", "name", "affects", "direction", "status"]]
+'''),
+("md", """\
+### Error budget after Phase 3 so far
+
+| Component | h=1 error source | SD (pp on headline) |
+|---|---|---|
+| Eldsneyti | calibration residual 0.86pp × ~3.5% | **0.03** (was ~0.10 unobserved) |
+| Flugfargjöld/CP073 | unobserved, ±10–20% swings × ~3.9% | ~0.25 — **the binding constraint** |
+| Matur | model-only until snapshots accumulate | ~0.08 |
+| Admin steps | calendar scaffolded, quantification manual | episodic (±1pp in January) |
+
+The h=1 target of ≤0.15pp RMSE (Phase 5 gate) is not reachable while airfares are
+unobserved — that is the next data source to secure, exactly as the plan ranks it.
+"""),
+]
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["1", "2", "3"]
+    which = sys.argv[1:] or ["1", "2", "3", "4"]
     if "1" in which:
         build(NB_DIR / "01_data_and_weights.ipynb", nb1)
     if "2" in which:
         build(NB_DIR / "02_reconstruction_check.ipynb", nb2)
     if "3" in which:
         build(NB_DIR / "03_forecast.ipynb", nb3)
+    if "4" in which:
+        build(NB_DIR / "04_nowcast.ipynb", nb4)
