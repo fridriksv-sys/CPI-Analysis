@@ -15,6 +15,7 @@ forecast layer is the v0 baseline of Phase 5.
 | `notebooks/02_reconstruction_check.ipynb` | **The hard gate**: the published headline is rebuilt from components for every month 2019–2026, chain-link months included, plus a negative control proving the check has teeth |
 | `notebooks/03_forecast.ipynb` | 12-month forecast: per-component models with visible parameters, weight × m/m contribution tables, bootstrap fan chart, verðtrygging (t+2) path, honest walk-forward backtest |
 | `notebooks/04_nowcast.ipynb` | Phase 3 observables: Gasvaktin fuel calibration (2016–, R²≈0.84) feeding CP0722; the January-2026 lesson (fuel observed correctly, km-charge missed → fiscal calendar); status of pending grocery/airfare feeds |
+| `notebooks/05_imputed_rent.ipynb` | Phase 4: HMS new-contract rents → Hagstofa stock-based CP042 as a distributed lag; post-break EWMA + HMS tilt beats RW and AR(1) OOS; regime-break diagnostic; 12-month rent path |
 
 Notebooks are committed **with outputs** so they read like a report. To re-run:
 
@@ -81,7 +82,17 @@ config/px_tables.yaml   table IDs discovered from the API (log, not input)
 - **Fiscal calendar** — `config/fiscal_calendar.yaml`; Jan-2026 steps realized
   and quantified from published data.
 
-## Not yet built (Phases 4–7)
+## Phase 4 status — done
 
-HMS rent distributed-lag model, wage calendar + ARDL blocks, BVAR + MinT
-reconciliation, analyst/breakeven benchmark table.
+Imputed-rent model live (`vnv/rent.py`, `vnv/hms.py`): HMS leiguvísitala and
+kaupvísitala auto-load from HMS's open CSVs (cached). CP042 m/m modeled post-June-
+2024 only as EWMA persistence + a shrunk tilt on lag-1..3 HMS new-contract rents;
+OOS RMSE 0.310 beats random walk (0.362) and AR(1) (0.339). Integrated via
+`models.forecast_components(..., hms_rent_mm=, sub_spliced=)` so the headline
+forecast and dashboard route CP042 through it. `hms.snapshot()` accrues input
+vintages going forward.
+
+## Not yet built (Phases 5–7)
+
+Wage calendar + ARDL blocks (FX/ULC pass-through), BVAR + MinT reconciliation,
+analyst / Seðlabanki / breakeven benchmark table.

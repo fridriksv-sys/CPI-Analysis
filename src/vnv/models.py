@@ -137,6 +137,24 @@ def forecast_component(fit: ComponentFit, start: pd.Period, horizons: int = 12) 
     return pd.Series(out, index=months)
 
 
+def forecast_components(
+    fits: dict[str, "ComponentFit"], jump_off, horizons: int = 12,
+    hms_rent_mm=None, sub_spliced=None,
+):
+    """Forecast every component m/m, routing CP042 through the Phase 4 rent model.
+
+    If hms_rent_mm + sub_spliced are supplied, the reiknuð húsaleiga column is
+    replaced by rent.forecast_cp042 (EWMA persistence + HMS new-contract tilt);
+    otherwise CP042 falls back to its generic seasonal/persistence fit.
+    """
+    fc = pd.DataFrame({c: forecast_component(fits[c], jump_off, horizons) for c in COMPONENTS})
+    if hms_rent_mm is not None and sub_spliced is not None and RENT_CODE in fc.columns:
+        from .rent import forecast_cp042, load_cp042_history
+        cp042_hist = load_cp042_history(sub_spliced)
+        fc[RENT_CODE] = forecast_cp042(cp042_hist, hms_rent_mm, jump_off, horizons)
+    return fc
+
+
 def aggregate_bottom_up(
     fcst_mm: pd.DataFrame, w0: pd.Series, price_update=None
 ) -> tuple[pd.Series, pd.DataFrame, pd.DataFrame]:

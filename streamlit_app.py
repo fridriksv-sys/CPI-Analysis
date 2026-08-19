@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from vnv import airfares, fuel, groceries, ingest, models, nowcast, reconstruct
+from vnv import airfares, fuel, groceries, ingest, models, nowcast, reconstruct, rent
 
 st.set_page_config(page_title="VNV spá", page_icon="📈", layout="wide")
 
@@ -46,8 +46,9 @@ def run_forecast():
     latest = sub_new[sub_new.manudur == last_m].set_index("code")
     w0 = latest.loc[models.COMPONENTS, "vaegi"]
     fits = {c: models.fit_component(g[c], c) for c in models.COMPONENTS}
-    fc = pd.DataFrame({c: models.forecast_component(fits[c], last_m, 12)
-                       for c in models.COMPONENTS})
+    spl = ingest.load_sub_spliced()
+    fc = models.forecast_components(fits, last_m, 12, hms_rent_mm=rent.hms_rent_mm(),
+                                    sub_spliced=spl)
     cal = nowcast.calibrate_fuel()
     try:
         obs = nowcast.fuel_nowcast(last_m + 1, cal)
@@ -206,6 +207,8 @@ with tab_feed:
         ("Hagstofan PxWeb", "✅ virk", f"nýjast: {last_m}"),
         ("Eldsneyti — Gasvaktin", "✅ virk",
          f"nýjast: {fuel_last.index[-1]:%Y-%m-%d} ({fuel_last.iloc[-1]:.1f} kr/l bensín)"),
+        ("Húsaleiga — HMS leiguvísitala", "✅ virk",
+         f"nýjast: {rent.hms_rent_mm().dropna().index[-1]} · knýr CP042 líkanið"),
         ("Matvörur — Krónan (kronan_price_history í Supabase)", "🟡 söfnun hafin",
          f"{n_snap} raðir í staðbundnu afriti — keyra scripts/export_kronan_history.py; "
          "kvörðun þegar saga spannar ≥2 söfnunarglugga"),
