@@ -1,0 +1,49 @@
+# Dated kjarasamningar (collective wage-agreement) steps for the domestic-
+# services block (PLAN_1.md §5: encode as dated steps; do NOT let a regression
+# discover them — the wage->service-price regression is near-zero, R^2~0.02).
+#
+# `mm_pp` = the step's additive impact on the AFFECTED CPI component's m/m, in
+# percentage points. NULL where the CPI pass-through is not yet quantified from a
+# primary source — the model treats null as 0, so these rows are documentation /
+# scaffolding until verified (same discipline as fiscal_calendar.yaml). Realized
+# wage steps are already embedded in each component's recent drift via the
+# launavísitala; this calendar is primarily for KNOWN FUTURE steps on the path.
+#
+# Source to verify against: SA / SGS broad agreement signed March 2024, term to
+# Jan 2028 (stöðugleikasamningar): general rises ~3.5% or ISK 23,750/mo each
+# January 2025-2027, plus a May "hagvaxtarauki" (GDP-growth bonus) 2025-2028.
+
+- date: 2025-01
+  name: kjarasamningsbundin launahaekkun (SA/SGS, ~3.5% eda 23.750 kr)
+  affects: [CP11, CP043, CP06, CP10, CP13]
+  wage_pct: 3.5           # wage-index step (approx, verify)
+  mm_pp: null             # CPI-services pass-through not quantified
+  status: verify
+
+- date: 2025-05
+  name: hagvaxtarauki (GDP-growth bonus)
+  affects: [CP11, CP043, CP06, CP10, CP13]
+  wage_pct: null
+  mm_pp: null
+  status: verify
+
+- date: 2026-01
+  name: kjarasamningsbundin launahaekkun (SA/SGS, ~3.5%)
+  affects: [CP11, CP043, CP06, CP10, CP13]
+  wage_pct: 3.5
+  mm_pp: null
+  status: verify
+
+- date: 2026-05
+  name: hagvaxtarauki (GDP-growth bonus)
+  affects: [CP11, CP043, CP06, CP10, CP13]
+  wage_pct: null
+  mm_pp: null
+  status: verify
+
+- date: 2027-01
+  name: kjarasamningsbundin launahaekkun (SA/SGS, lokahaekkun samnings)
+  affects: [CP11, CP043, CP06, CP10, CP13]
+  wage_pct: 3.5
+  mm_pp: null
+  status: verify

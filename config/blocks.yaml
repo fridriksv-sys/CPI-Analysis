@@ -1,0 +1,30 @@
+# Driver-based grouping of COICOP2018 forecast components (PLAN_1.md §3).
+# Each component appears in exactly one block. Components already handled by a
+# dedicated model are listed under `special` and keep that model.
+#
+# Drivers:
+#   fx    = ISK gengisvísitala (Seðlabanki NEER; higher = weaker króna)
+#   food  = FAO world food price index (USD) + fx
+#   wage  = Hagstofa launavísitala (+ dated kjarasamningar steps)
+
+special:                      # modeled elsewhere, not by an ARDL block
+  CP042: imputed_rent         # Phase 4 HMS rent model
+  CP0722: fuel_observed       # Phase 3 Gasvaktin nowcast
+  CP073: airfares_observed    # Phase 3 Icelandair collection (calibration pending)
+
+blocks:
+  food:                       # FX + world food pass-through
+    driver: [fx, food]
+    components: [CP01, CP02]
+  imported_goods:             # ISK NEER pass-through
+    driver: [fx]
+    # CP05 (furnishings) and CP08 (comms) dropped: near-zero/negative estimated
+    # pass-through and no OOS gain (CP08 is admin/tech-deflationary). They keep
+    # the generic model.
+    components: [CP03, CP071]
+  domestic_services:          # wages / ULC with inertia + wage calendar
+    driver: [wage]
+    components: [CP043, CP06, CP10, CP11, CP13]
+  # Everything not listed keeps the generic seasonal + AR(1) model:
+  #   CP041 (greidd húsaleiga), CP044, CP045 (utilities - administered),
+  #   CP074, CP0721, CP0723, CP0724 (transport ex-fuel ex-air), CP09 (mixed).

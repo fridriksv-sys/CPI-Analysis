@@ -131,3 +131,42 @@ def load_weights_old(use_cache: bool = True) -> pd.DataFrame:
     ).reset_index()
     wide.columns.name = None
     return wide.rename(columns={"Undirvísitala": "code", "Undirvísitala_text": "heiti"})
+
+
+# Wage index lives under a different PxWeb database root (Samfelag, not Efnahagur).
+WAGE_URL = ("https://px.hagstofa.is/pxis/api/v1/is/Samfelag/launogtekjur/"
+            "2_lvt/1_manadartolur/LAU04000.px")
+
+
+def load_wages(use_cache: bool = True) -> pd.DataFrame:
+    """Hagstofa launavísitala (wage index), monthly since 1989.
+
+    Returns a frame indexed by month with columns index / change_M / change_A.
+    Drives the domestic-services block (Phase 5).
+    """
+    import hashlib
+    import json as _json
+
+    cache = px_client.RAW_DIR / f"wages_{hashlib.sha256(WAGE_URL.encode()).hexdigest()[:12]}.json"
+    if use_cache and cache.exists():
+        data = _json.loads(cache.read_text(encoding="utf-8"))
+    else:
+        meta = px_client._request(WAGE_URL)
+        query = {"query": [{"code": v["code"],
+                            "selection": {"filter": "item", "values": v["values"]}}
+                           for v in meta["variables"]],
+                 "response": {"format": "json"}}
+        data = px_client._request(WAGE_URL, query, use_cache=False)
+        cache.write_text(_json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    df = px_client._tidy_from_json(data)
+    df["manudur"] = _month_index(df["Mánuður"])
+    wide = df.pivot_table(index="manudur", columns="Eining", values="value", aggfunc="first")
+    return wide.sort_index()
+
+
+def wages_mm(use_cache: bool = True) -> pd.Series:
+    """Wage-index m/m (%). Prefer the published change_M; fall back to a diff."""
+    w = load_wages(use_cache=use_cache)
+    if "change_M" in w.columns:
+        return w["change_M"].rename("wage_mm")
+    return (w["index"].pct_change() * 100).rename("wage_mm")

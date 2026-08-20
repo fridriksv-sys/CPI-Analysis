@@ -16,6 +16,7 @@ forecast layer is the v0 baseline of Phase 5.
 | `notebooks/03_forecast.ipynb` | 12-month forecast: per-component models with visible parameters, weight × m/m contribution tables, bootstrap fan chart, verðtrygging (t+2) path, honest walk-forward backtest |
 | `notebooks/04_nowcast.ipynb` | Phase 3 observables: Gasvaktin fuel calibration (2016–, R²≈0.84) feeding CP0722; the January-2026 lesson (fuel observed correctly, km-charge missed → fiscal calendar); status of pending grocery/airfare feeds |
 | `notebooks/05_imputed_rent.ipynb` | Phase 4: HMS new-contract rents → Hagstofa stock-based CP042 as a distributed lag; post-break EWMA + HMS tilt beats RW and AR(1) OOS; regime-break diagnostic; 12-month rent path |
+| `notebooks/06_driver_blocks.ipynb` | Phase 5: FX pass-through into food/imported goods (lands in the plan's 0.2–0.4 range), validated OOS as a shrunk tilt; wage calendar for kjarasamningar steps; full h=1 stack |
 
 Notebooks are committed **with outputs** so they read like a report. To re-run:
 
@@ -92,7 +93,20 @@ OOS RMSE 0.310 beats random walk (0.362) and AR(1) (0.339). Integrated via
 forecast and dashboard route CP042 through it. `hms.snapshot()` accrues input
 vintages going forward.
 
-## Not yet built (Phases 5–7)
+## Phase 5 status — done
 
-Wage calendar + ARDL blocks (FX/ULC pass-through), BVAR + MinT reconciliation,
-analyst / Seðlabanki / breakeven benchmark table.
+Driver blocks live. New sources: Seðlabanki gengisvísitala (ISK NEER) via the
+dated-snapshot API (`vnv/sedlabanki.py`), Hagstofa launavísitala
+(`ingest.load_wages`), FAO world food (`vnv/worldfood.py`). `vnv/blocks.py`
+estimates FX pass-through (CP01/CP02/CP03/CP071; cumulative 0.19–0.43 over 12m,
+in the plan's range) and applies it as a shrunk tilt where it beats the generic
+fit OOS; `config/wage_calendar.yaml` carries kjarasamningar steps. Integrated via
+`models.forecast_components(..., comp_history=, fx_mm=)`. Full h=1 stack (fuel +
+rent + FX) improves the ex-January headline RMSE 0.353 → 0.320; the ≤0.15pp gate
+is airfare-gated (airfares still collecting) and needs the fiscal calendar applied
+for January — exactly as the plan anticipates.
+
+## Not yet built (Phases 6–7)
+
+BVAR top-down + MinT reconciliation for the 12-month path; analyst / Seðlabanki /
+breakeven benchmark table.

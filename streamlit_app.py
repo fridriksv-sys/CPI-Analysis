@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from vnv import airfares, fuel, groceries, ingest, models, nowcast, reconstruct, rent
+from vnv import airfares, blocks, fuel, groceries, ingest, models, nowcast, reconstruct, rent, sedlabanki
 
 st.set_page_config(page_title="VNV spá", page_icon="📈", layout="wide")
 
@@ -48,7 +48,7 @@ def run_forecast():
     fits = {c: models.fit_component(g[c], c) for c in models.COMPONENTS}
     spl = ingest.load_sub_spliced()
     fc = models.forecast_components(fits, last_m, 12, hms_rent_mm=rent.hms_rent_mm(),
-                                    sub_spliced=spl)
+                                    sub_spliced=spl, comp_history=g, fx_mm=sedlabanki.fx_mm())
     cal = nowcast.calibrate_fuel()
     try:
         obs = nowcast.fuel_nowcast(last_m + 1, cal)
@@ -209,6 +209,10 @@ with tab_feed:
          f"nýjast: {fuel_last.index[-1]:%Y-%m-%d} ({fuel_last.iloc[-1]:.1f} kr/l bensín)"),
         ("Húsaleiga — HMS leiguvísitala", "✅ virk",
          f"nýjast: {rent.hms_rent_mm().dropna().index[-1]} · knýr CP042 líkanið"),
+        ("Gengi — Seðlabanki gengisvísitala", "✅ virk",
+         f"nýjast: {sedlabanki.load_fx().index[-1]} · FX-áhrif á CP01/CP02/CP03/CP071"),
+        ("Laun — Hagstofa launavísitala", "✅ virk",
+         f"nýjast: {ingest.wages_mm().dropna().index[-1]} · kjarasamningar í wage_calendar.yaml"),
         ("Matvörur — Krónan (kronan_price_history í Supabase)", "🟡 söfnun hafin",
          f"{n_snap} raðir í staðbundnu afriti — keyra scripts/export_kronan_history.py; "
          "kvörðun þegar saga spannar ≥2 söfnunarglugga"),

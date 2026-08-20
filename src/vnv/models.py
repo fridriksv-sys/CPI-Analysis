@@ -139,19 +139,41 @@ def forecast_component(fit: ComponentFit, start: pd.Period, horizons: int = 12) 
 
 def forecast_components(
     fits: dict[str, "ComponentFit"], jump_off, horizons: int = 12,
-    hms_rent_mm=None, sub_spliced=None,
+    hms_rent_mm=None, sub_spliced=None, comp_history=None, fx_mm=None,
 ):
-    """Forecast every component m/m, routing CP042 through the Phase 4 rent model.
+    """Forecast every component m/m, routing special components through their models.
 
-    If hms_rent_mm + sub_spliced are supplied, the reiknuð húsaleiga column is
-    replaced by rent.forecast_cp042 (EWMA persistence + HMS new-contract tilt);
-    otherwise CP042 falls back to its generic seasonal/persistence fit.
+    - CP042 (reiknuð húsaleiga): Phase 4 HMS rent model, if hms_rent_mm +
+      sub_spliced supplied.
+    - Food + imported-goods components: Phase 5 FX pass-through tilt, if
+      comp_history + fx_mm supplied (shrunk onto the generic fit).
+    - Domestic-services components: dated wage-calendar steps added on the path.
+    Anything without a special model keeps its generic seasonal/AR fit.
     """
     fc = pd.DataFrame({c: forecast_component(fits[c], jump_off, horizons) for c in COMPONENTS})
+
     if hms_rent_mm is not None and sub_spliced is not None and RENT_CODE in fc.columns:
         from .rent import forecast_cp042, load_cp042_history
-        cp042_hist = load_cp042_history(sub_spliced)
-        fc[RENT_CODE] = forecast_cp042(cp042_hist, hms_rent_mm, jump_off, horizons)
+        fc[RENT_CODE] = forecast_cp042(load_cp042_history(sub_spliced), hms_rent_mm, jump_off, horizons)
+
+    if comp_history is not None and fx_mm is not None:
+        from . import blocks
+        fx_comps = [c for cs in blocks.fx_components().values() for c in cs if c in fc.columns]
+        fits_fx = {c: blocks.fit_fx_passthrough(comp_history[c].dropna(), fx_mm, train_end=jump_off)
+                   for c in fx_comps}
+        for m in fc.index:
+            for c in fx_comps:
+                tilt = blocks.fx_tilt_forecast(fits_fx[c], fx_mm, m)
+                if tilt is None:
+                    continue  # FX unknown beyond jump-off -> keep generic (path h>=2)
+                seas = fits_fx[c]["seasonal"].get(m.month, fc.loc[m, c])
+                fc.loc[m, c] = (1 - blocks.FX_TILT) * fc.loc[m, c] + blocks.FX_TILT * (seas + tilt)
+        # dated wage-calendar steps on domestic-services components
+        for m in fc.index:
+            for c in blocks.domestic_service_components():
+                if c in fc.columns:
+                    fc.loc[m, c] += blocks.wage_step(m, c)
+
     return fc
 
 
