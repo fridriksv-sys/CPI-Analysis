@@ -161,12 +161,15 @@ def build_report() -> dict:
     mvb = benchmarks.model_vs_breakeven(yy_12m)
     # model vs bank analysts (if slot populated)
     analysts = benchmarks.analyst_comparison(head, nowcast_mm, last_m + 1)
+    # model vs Seðlabanki Peningamál (quarterly y/y forecast)
+    yy_path = (path_idx / idx_hist.reindex(path_idx.index - 12).to_numpy() - 1) * 100
+    peningamal = benchmarks.peningamal_comparison(yy_path)
 
     # per-component detail: history + forecast index trend, method, contribution
     details = component_details(fc, contribs, w0, last_m)
 
     return dict(last_m=last_m, nowcast_month=last_m + 1, nowcast_mm=nowcast_mm,
-                analysts=analysts,
+                analysts=analysts, peningamal=peningamal,
                 yy_12m=yy_12m, band90=(yy_12m - 1.64 * cum_sd, yy_12m + 1.64 * cum_sd),
                 yy_path=(path_idx / idx_hist.reindex(path_idx.index - 12).to_numpy() - 1) * 100,
                 path_idx=path_idx, rec_sd=rec_sd,
@@ -264,4 +267,21 @@ def to_markdown(rep: dict) -> str:
                       "| Aðili / Source | n | RMSE | Bias |", "|---|---|---|---|"]
             for r in an["track"].itertuples():
                 lines.append(f"| {r.source} | {int(r.n)} | {r.RMSE:.3f} | {r.bias:+.3f} |")
+
+    pm = rep.get("peningamal")
+    lines += ["", "## Módel vs Seðlabanki (Peningamál) / Model vs central bank", ""]
+    if not pm:
+        lines.append("_Engin Peningamál-spá skráð — sjá data/benchmarks/peningamal.csv._")
+    else:
+        lines.append(f"Ársfjórðungsleg y/y-spá, Peningamál {pd.Timestamp(pm['vintage']):%Y-%m-%d}:")
+        lines.append("")
+        lines.append("| Ársfj. / Quarter | Módel y/y | Seðlabanki y/y | Munur / Diff |")
+        lines.append("|---|---|---|---|")
+        for r in pm["rows"]:
+            lines.append(f"| {r['quarter']} | {r['model_yoy']:.2f}% | {r['peningamal_yoy']:.1f}% | "
+                         f"{r['diff']:+.2f}pp |")
+        lines.append("")
+        lines.append("_Nálægt í ár, en módelið sér þrálátari verðbólgu en Seðlabankinn á 12 mán. "
+                     "vegna leiguígildis (Fasi 4). / Close near-term, but the model sees stickier "
+                     "inflation than the bank at 12m — rental-equivalence persistence (Phase 4)._")
     return "\n".join(lines)

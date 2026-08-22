@@ -1440,6 +1440,35 @@ print("\\ntrack record (m/m error vs realized):")
 display(an["track"])
 display(an["detail"].assign(manudur=lambda d: d.manudur.astype(str)))
 '''),
+("md", """\
+## Model vs Seðlabanki (Peningamál)
+
+The central bank's quarterly Peningamál (Tafla 5) is the official y/y forecast —
+the longer-horizon benchmark. The model **agrees near-term** but sees **stickier
+inflation at 12 months**: by 2027Q3 the model is ~1pp above Seðlabanki. That is
+the model's differentiated view, and it is structural — rental-equivalence rent
+(Phase 4) is persistent and keeps inflation elevated, while the bank's path
+reverts faster toward the 2.5% target. This is exactly where a bottom-up model
+earns its keep against a policy-anchored one.
+"""),
+("code", '''\
+pm = rep["peningamal"]
+print(f"Peningamál vintage {pd.Timestamp(pm['vintage']):%Y-%m-%d}")
+pmr = pd.DataFrame(pm["rows"])
+display(pmr)
+fig, ax = plt.subplots()
+yy2 = rep["yy_path"]
+xh = head[("CPI", "change_A")]["2024":]
+ax.plot(xh.index.to_timestamp(), xh, color=C["black"], lw=1.6, label="raun")
+ax.plot(yy2.index.to_timestamp(), yy2, color=C["blue"], lw=2.2, label="módel")
+qx = [pd.Period(r["quarter"], "Q").to_timestamp(how="end") for r in pm["rows"]]
+ax.plot(qx, [r["peningamal_yoy"] for r in pm["rows"]], color=C["green"], lw=1.6,
+        ls="--", marker="s", ms=6, label="Seðlabanki")
+ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6)
+ax.set_ylabel("y/y %"); ax.set_title("Verðbólga: módel vs Seðlabanki (Peningamál)")
+ax.legend(frameon=False)
+plt.show()
+'''),
 ("md", "## The monthly one-pager"),
 ("code", '''\
 from IPython.display import Markdown

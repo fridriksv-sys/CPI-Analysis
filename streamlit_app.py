@@ -232,6 +232,7 @@ with tab_feed:
     n_quotes = len(airfares.load_quotes())
     from vnv import benchmarks as _bm
     n_analyst = len(_bm.load_analyst_forecasts())
+    n_pm = len(_bm.load_peningamal())
     rows = [
         ("Hagstofan PxWeb", "✅ virk", f"nýjast: {last_m}"),
         ("Eldsneyti — Gasvaktin", "✅ virk",
@@ -247,6 +248,8 @@ with tab_feed:
          "LoadChartData API; keyra lanamal.update_breakeven_slot() til uppfærslu"),
         ("Greiningaraðilar (Íslandsbanki/Landsbankinn)", "🟡 handvirkt",
          f"{n_analyst} spár skráðar; bæta við hvern mánuð í analyst_forecasts.csv"),
+        ("Seðlabanki Peningamál (y/y spá)", "🟡 handvirkt",
+         f"{n_pm} ársfj. skráðir; uppfæra ~4x/ári úr Peningamál Töflu 5"),
         ("Matvörur — Krónan (kronan_price_history í Supabase)", "🟡 söfnun hafin",
          f"{n_snap} raðir í staðbundnu afriti — keyra scripts/export_kronan_history.py; "
          "kvörðun þegar saga spannar ≥2 söfnunarglugga"),
@@ -412,6 +415,37 @@ with tab_rep:
                 st.dataframe(det.round(3), width="stretch", hide_index=True)
             st.caption("Fáir mánuðir skráðir enn — ferilskráin styrkist eftir því sem spár "
                        "bætast við hvern mánuð.")
+
+    # --- 6) Model vs Seðlabanki Peningamál -------------------------------
+    st.header("6 · Módel vs Seðlabanki (Peningamál)")
+    pm = rep.get("peningamal")
+    if not pm:
+        st.info("Engin Peningamál-spá skráð. Bæta við í data/benchmarks/peningamal.csv "
+                "(ársfjórðungsleg y/y-spá, Tafla 5, birt ~4x á ári).")
+    else:
+        pmr = pd.DataFrame(pm["rows"])
+        st.markdown(f"**Ársfjórðungsleg y/y-spá** — Peningamál {pd.Timestamp(pm['vintage']):%Y-%m-%d}:")
+        show = pmr.copy()
+        show.columns = ["Ársfj.", "Módel y/y %", "Seðlabanki y/y %", "Munur pp"]
+        st.dataframe(show, width="stretch", hide_index=True)
+        # chart: model monthly y/y path + Peningamál quarterly markers + target
+        yy_path2 = rep["yy_path"]
+        xh = head[("CPI", "change_A")]["2024":]
+        fig, ax = plt.subplots(figsize=(10, 3.8))
+        ax.plot(xh.index.to_timestamp(), xh, color=C["black"], lw=1.6, label="raun y/y")
+        ax.plot(yy_path2.index.to_timestamp(), yy_path2, color=C["blue"], lw=2.2, label="módel (reconciled)")
+        qx = [pd.Period(r["quarter"], "Q").to_timestamp(how="end") for r in pm["rows"]]
+        ax.plot(qx, [r["peningamal_yoy"] for r in pm["rows"]], color=C["green"],
+                lw=1.6, marker="s", ms=6, ls="--", label="Seðlabanki (Peningamál)")
+        ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6, label="markmið 2,5%")
+        ax.set_ylabel("y/y %"); ax.set_title("Verðbólga: módel vs Seðlabanki")
+        ax.legend(frameon=False, ncols=4, fontsize=8)
+        st.pyplot(fig, width="stretch")
+        st.caption("Nálægt í ár en módelið sér þrálátari verðbólgu en Seðlabankinn á 12 mán.: "
+                   "leiguígildi (reiknuð húsaleiga) er þrálátt og heldur verðbólgu uppi, á meðan "
+                   "spá Seðlabankans stefnir hraðar í markmið. / Close near-term; the model sees "
+                   "stickier 12-month inflation than the bank because rental-equivalence rent is "
+                   "persistent (Phase 4), while the bank's path reverts faster to target.")
 
     st.divider()
     st.download_button("Sækja samantekt (markdown)", _report.to_markdown(rep),

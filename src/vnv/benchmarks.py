@@ -23,6 +23,7 @@ DATA = REPO_ROOT / "data" / "benchmarks"
 
 BREAKEVEN_COLS = ["date", "horizon_yrs", "breakeven_pct"]
 ANALYST_COLS = ["forecast_date", "target_month", "source", "mm_pct", "yoy_pct"]
+PENINGAMAL_COLS = ["forecast_date", "target_quarter", "yoy_pct"]
 
 
 def load_breakeven() -> pd.DataFrame:
@@ -47,6 +48,38 @@ def load_analyst_forecasts() -> pd.DataFrame:
     df = pd.read_csv(f, parse_dates=["forecast_date"])
     df["manudur"] = pd.PeriodIndex(df.target_month.astype(str), freq="M")
     return df
+
+
+def load_peningamal() -> pd.DataFrame:
+    """Seðlabanki Peningamál quarterly y/y inflation forecast (Tafla 5).
+
+    Populate data/benchmarks/peningamal.csv from each quarterly Peningamál
+    (published ~Feb/May/Aug/Nov). Real published figures only."""
+    f = DATA / "peningamal.csv"
+    if not f.exists():
+        return pd.DataFrame(columns=PENINGAMAL_COLS)
+    df = pd.read_csv(f, parse_dates=["forecast_date"])
+    df["quarter"] = pd.PeriodIndex(df.target_quarter.str.replace("Q", "Q"), freq="Q")
+    return df
+
+
+def peningamal_comparison(yy_path_monthly: pd.Series) -> dict | None:
+    """Model's quarterly-average y/y vs the latest Peningamál forecast, over the
+    quarters the model path covers. yy_path_monthly: reconciled y/y by month."""
+    pm = load_peningamal()
+    if pm.empty or yy_path_monthly.empty:
+        return None
+    pm = pm[pm.forecast_date == pm.forecast_date.max()]
+    model_q = yy_path_monthly.groupby(yy_path_monthly.index.asfreq("Q")).mean()
+    rows = []
+    for r in pm.itertuples():
+        if r.quarter in model_q.index:
+            rows.append({"quarter": str(r.quarter), "model_yoy": round(float(model_q[r.quarter]), 2),
+                         "peningamal_yoy": r.yoy_pct, "diff": round(float(model_q[r.quarter]) - r.yoy_pct, 2)})
+    if not rows:
+        return None
+    return {"vintage": pm.forecast_date.max(), "rows": rows,
+            "full_curve": pm[["target_quarter", "yoy_pct"]].to_dict("records")}
 
 
 def analyst_comparison(head, model_nowcast: float, nowcast_month) -> dict | None:

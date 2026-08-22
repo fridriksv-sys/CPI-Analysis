@@ -153,6 +153,18 @@ model-vs-consensus gap and each source's realized track record. As the plan
 predicts, analysts are hard to beat at h=1 (they run the same public scrapes) — the
 edge is at h=3–12; the track record confirms it (Landsbankinn h=1 RMSE ~0.09pp).
 
-**All seven plan phases are implemented and live end to end.** The airfare and
-grocery observable feeds keep maturing to sharpen h=1; the analyst slot grows one
-row per source per month.
+## Seðlabanki Peningamál benchmark
+
+The central bank's quarterly y/y forecast (Peningamál Tafla 5) is the longer-horizon
+benchmark — real figures in `data/benchmarks/peningamal.csv`, updated ~4×/year. The
+report's "Módel vs Seðlabanki" section overlays the model's quarterly-average y/y on
+the Peningamál path. Current read: the model agrees near-term (2026 within ~0.2pp)
+but sees **stickier inflation at 12 months** (2027Q3: model 4.1% vs Seðlabanki 3.0%,
++1.1pp) — the model's differentiated, structural view, since rental-equivalence rent
+(Phase 4) is persistent while the bank's path reverts faster to target.
+
+**All seven plan phases are implemented and live end to end**, with the full
+benchmark set: seasonal-naive & random-walk floors, the tradeable RIKB−RIKS
+breakeven, bank-analyst consensus, and Seðlabanki Peningamál. The airfare and
+grocery observable feeds keep maturing to sharpen h=1; the analyst and Peningamál
+slots grow one row per print / quarter.
