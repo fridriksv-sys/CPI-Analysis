@@ -241,8 +241,8 @@ with tab_feed:
         ("Laun — Hagstofa launavísitala", "✅ virk",
          f"nýjast: {ingest.wages_mm().dropna().index[-1]} · kjarasamningar í wage_calendar.yaml"),
         ("Heimsmatvöruverð — FAO", "✅ virk", "prófað fyrir CP01 — of veikt, sleppt"),
-        ("Breakeven (RIKS/RIKB)", "🔴 vantar feed",
-         "data/benchmarks/breakeven.csv — þarf LSEG/Keldan; samanburðarkóði tilbúinn"),
+        ("Verðbólguálag (RIKB/RIKS) — lanamal.is", "✅ virk",
+         "LoadChartData API; keyra lanamal.update_breakeven_slot() til uppfærslu"),
         ("Matvörur — Krónan (kronan_price_history í Supabase)", "🟡 söfnun hafin",
          f"{n_snap} raðir í staðbundnu afriti — keyra scripts/export_kronan_history.py; "
          "kvörðun þegar saga spannar ≥2 söfnunarglugga"),
@@ -278,6 +278,11 @@ with tab_rep:
 
     @st.cache_data(ttl=3600, show_spinner="Bý til mánaðarskýrslu ...")
     def _monthly():
+        try:  # refresh market breakeven (RIKB/RIKS) from lanamal.is; keep last on failure
+            from vnv import lanamal
+            lanamal.update_breakeven_slot(use_cache=False)
+        except Exception:
+            pass
         return _report.build_report()
 
     rep = _monthly()
@@ -344,6 +349,33 @@ with tab_rep:
             with cc2:
                 st.markdown(f"**Aðferð / Method:** {det['method_label']}")
                 st.caption(det["method_desc"])
+
+    # --- 4) Model vs market breakeven -------------------------------------
+    st.header("4 · Módel vs markaður (verðbólguálag)")
+    mvb = rep["model_vs_breakeven"]
+    if mvb is None:
+        st.info("Breakeven-gögn óuppfyllt. Keyra `lanamal.update_breakeven_slot()` "
+                "til að sækja RIKB/RIKS af lanamal.is.")
+    else:
+        cc = [r for r in mvb["curve"]]
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Módel 12-mán. verðbólga", f"{mvb['model_yoy']:.1f}%")
+        k2.metric(f"Markaðsálag (stysta ~{mvb['breakeven_horizon_yrs']:.0f}á)",
+                  f"{mvb['breakeven']:.2f}%")
+        k3.metric("Fleygur (álag − módel)", f"{mvb['implied_wedge']:+.2f}pp")
+        hs = [r["horizon_yrs"] for r in cc]; be = [r["breakeven_pct"] for r in cc]
+        fig, ax = plt.subplots(figsize=(9, 3.2))
+        ax.plot(hs, be, color=C["green"], lw=2, marker="o", label="markaðs-verðbólguálag (RIKB−RIKS)")
+        ax.axhline(mvb["model_yoy"], color=C["blue"], lw=1.6, ls="--", label="módel 12-mán.")
+        ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6, label="markmið 2,5%")
+        ax.set_xlabel("sjóndeildarhringur (ár)"); ax.set_ylabel("%")
+        ax.set_title("Verðbólguálag vs módel"); ax.legend(frameon=False, fontsize=8)
+        st.pyplot(fig, width="stretch")
+        st.caption("Verðbólguálag = óverðtryggð ávöxtun (RIKB) − verðtryggð (RIKS), "
+                   "lanamal.is. Stysta verðtryggða bréf er ~4 ár, svo álagið ber "
+                   "áhættuálag og skortsálag verðtryggðra bréfa — þar liggur h=3–12 "
+                   "forskot módelsins. / Breakeven carries risk & scarcity premia; "
+                   "the model is a cleaner near-term expectation.")
 
     st.divider()
     st.download_button("Sækja samantekt (markdown)", _report.to_markdown(rep),

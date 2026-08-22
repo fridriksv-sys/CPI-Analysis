@@ -130,12 +130,19 @@ airfares dominate). Monthly one-pager (`vnv/report.py`, bilingual): nowcast,
 Benchmark slots (`vnv/benchmarks.py`, `data/benchmarks/`) ready for the breakeven
 and analyst feeds.
 
-## One remaining data dependency
+## Breakeven benchmark — live from lanamal.is
 
-Breakeven inflation (RIKS vs RIKB) — the tradeable benchmark — needs a market feed
-(authorize the LSEG connector, or a Keldan/Kodiak feed) dropped into
-`data/benchmarks/breakeven.csv`; the model-vs-breakeven decomposition then lights
-up automatically. The airfare and grocery observable feeds keep maturing (they
-sharpen h=1 as their collection windows accumulate).
+Breakeven inflation (RIKB nominal − RIKS real yields) — the tradeable benchmark —
+comes live from Lánamál ríkisins (`vnv/lanamal.py`, the `LoadChartData` JSON API;
+no paid feed needed). `lanamal.update_breakeven_slot()` writes the curve to
+`data/benchmarks/breakeven.csv`; the report's model-vs-breakeven section and the
+dashboard "Skýrsla" tab render it automatically. Refresh with
+`scripts/refresh_breakeven.py`. The shortest indexed bond matures ~4y out, so the
+shortest breakeven is ~4y — its gap to the model's near-term call is an indicative
+premium/expectations wedge (breakevens carry inflation-risk and indexed-bond
+scarcity premia, which is where the h=3–12 edge lives).
 
-**All seven plan phases are implemented and live end to end.**
+**All seven plan phases are implemented and live end to end.** The only optional
+slot left is manual entry of bank-analyst / Peningamál forecasts
+(`data/benchmarks/analyst_forecasts.csv`); the airfare and grocery observable
+feeds keep maturing to sharpen h=1.

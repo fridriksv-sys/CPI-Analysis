@@ -226,12 +226,20 @@ def to_markdown(rep: dict) -> str:
         lines.append(f"| {m} | {r.VNV_spa:.1f} |")
     lines.append("| … | … |")
     mvb = rep["model_vs_breakeven"]
-    lines += ["", "## Módel vs breakeven / Model vs breakeven", ""]
+    lines += ["", "## Módel vs verðbólguálag / Model vs breakeven", ""]
     if mvb is None:
-        lines.append("_Breakeven slot óupppfyllt — sjá data/benchmarks/breakeven.csv "
-                     "(needs LSEG/Keldan feed)._")
+        lines.append("_Breakeven slot óupppfyllt — keyra `lanamal.update_breakeven_slot()`._")
     else:
-        lines.append(f"- Módel y/y: {mvb['model_yoy']:.2f}%  ")
-        lines.append(f"- Breakeven ({mvb['horizon_yrs']}y): {mvb['breakeven']:.2f}%  ")
-        lines.append(f"- Óbeint álag / implied premium: {mvb['implied_premium']:+.2f}pp")
+        lines.append(f"- Módel 12-mán. verðbólga / model 12-month: {mvb['model_yoy']:.2f}%  ")
+        lines.append(f"- Markaðs-verðbólguálag (RIKB−RIKS), "
+                     f"stysta {mvb['breakeven_horizon_yrs']:.0f}á / shortest breakeven: "
+                     f"{mvb['breakeven']:.2f}%  ")
+        lines.append(f"- Fleygur / wedge (álag − módel): {mvb['implied_wedge']:+.2f}pp "
+                     "_(ólíkir sjóndeildarhringir; álag ber áhættu- og skortsálag / "
+                     "horizons differ; breakeven carries risk & scarcity premia)_")
+        lines.append("")
+        lines.append("| Sjóndeild. / Horizon (yr) | Verðbólguálag / Breakeven (%) |")
+        lines.append("|---|---|")
+        for r in mvb["curve"]:
+            lines.append(f"| {r['horizon_yrs']:.0f} | {r['breakeven_pct']:.2f} |")
     return "\n".join(lines)

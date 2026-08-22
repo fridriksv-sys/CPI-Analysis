@@ -1390,32 +1390,43 @@ ax.grid(axis="y", alpha=0)
 plt.tight_layout(); plt.show()
 '''),
 ("md", """\
-## Benchmarks that need a market feed
+## The tradeable benchmark: breakeven inflation (RIKB − RIKS)
 
-The plan's remaining benchmarks are not machine-accessible here:
-- **Breakeven inflation (RIKS vs RIKB)** — the tradeable benchmark and the whole
-  economic point (the h=3–12 edge, where breakevens carry an inflation-risk
-  premium and an indexed-bond scarcity premium). Clean source: a market feed
-  (LSEG connector — needs auth; or Keldan/Kodiak). Seðlabanki publishes
-  verðbólguálag only inside monetary-policy reports, not the open data API.
-- **Bank analysts** (Íslandsbanki Greining, Landsbankinn, Arion) and **Seðlabanki
-  Peningamál** — published in notes/PDFs.
-
-Both are wired to committed CSV slots (`data/benchmarks/`). The comparison code is
-ready; only the data is pending — populate the slot and the model-vs-breakeven
-decomposition lights up automatically.
+The breakeven — nominal government-bond yield (RIKB) minus real indexed-bond yield
+(RIKS) — is the market's inflation compensation and the whole economic point: the
+h=3–12 edge lives in the gap between it and true expectations (breakevens carry an
+inflation-risk premium and an indexed-bond scarcity premium). It comes **live from
+Lánamál ríkisins** (lanamal.is `LoadChartData` API) — no paid feed needed.
 """),
 ("code", '''\
-from vnv import benchmarks
-print("breakeven rows:", len(benchmarks.load_breakeven()),
-      "| analyst rows:", len(benchmarks.load_analyst_forecasts()))
-print("slot:", benchmarks.write_templates())
-print("model_vs_breakeven:", benchmarks.model_vs_breakeven(4.4))  # None until populated
+from vnv import benchmarks, lanamal, report
+lanamal.update_breakeven_slot()               # fetch RIKB/RIKS, write the slot
+cur = lanamal.breakeven_curve()
+display(cur)
+rep = report.build_report()                   # reused by the one-pager below
+mvb = benchmarks.model_vs_breakeven(rep["yy_12m"])
+print(f"model 12m: {rep['yy_12m']:.2f}%  |  shortest breakeven "
+      f"({mvb['breakeven_horizon_yrs']:.0f}yr): {mvb['breakeven']:.2f}%  |  "
+      f"wedge: {mvb['implied_wedge']:+.2f}pp")
 '''),
+("code", '''\
+fig, ax = plt.subplots()
+ax.plot(cur.horizon_yrs, cur.breakeven, color=C["green"], lw=2, marker="o", label="verðbólguálag (RIKB−RIKS)")
+ax.plot(cur.horizon_yrs, cur.nominal, color=C["orange"], lw=1.3, ls="--", label="óverðtryggð (RIKB)")
+ax.plot(cur.horizon_yrs, cur.real, color=C["blue"], lw=1.3, ls="--", label="verðtryggð (RIKS)")
+ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6)
+ax.set_xlabel("ár til gjalddaga"); ax.set_ylabel("%")
+ax.set_title("Markaðsávöxtun og verðbólguálag (lanamal.is)")
+ax.legend(frameon=False)
+plt.show()
+'''),
+("md", """\
+**Bank analysts** (Íslandsbanki Greining, Landsbankinn, Arion) and **Seðlabanki
+Peningamál** are published in notes/PDFs; they load from a committed CSV slot
+(`data/benchmarks/analyst_forecasts.csv`) and the comparison is ready once entered.
+"""),
 ("md", "## The monthly one-pager"),
 ("code", '''\
-from vnv import report
-rep = report.build_report()
 from IPython.display import Markdown
 Markdown(report.to_markdown(rep))
 '''),
@@ -1432,12 +1443,12 @@ Markdown(report.to_markdown(rep))
 | 6 | Top-down + MinT reconciliation | ✅ |
 | 7 | Backtest, benchmarks, monthly report | ✅ |
 
-**The one remaining data dependency** is the breakeven feed (LSEG/Keldan) for the
-tradeable-benchmark comparison — a data-access step, not a modelling one. The two
-observable feeds still maturing (airfares, groceries) will sharpen h=1 as their
-collection windows accumulate. Everything else is live end to end: from Hagstofa
-PxWeb through reconstruction, component models, observables, reconciliation, to
-the monthly one-pager.
+Everything is live end to end: from Hagstofa PxWeb through reconstruction,
+component models, observables, the HMS rent model, FX/wage blocks, MinT
+reconciliation, the market breakeven from lanamal.is, to the monthly one-pager.
+The two observable feeds still maturing (airfares, groceries) will sharpen h=1 as
+their collection windows accumulate; the only optional slot left is manual entry
+of bank-analyst / Peningamál forecasts.
 """),
 ]
 

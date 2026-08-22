@@ -46,21 +46,25 @@ def load_analyst_forecasts() -> pd.DataFrame:
 
 
 def model_vs_breakeven(model_yoy_12m: float, horizon_yrs: float = 1.0):
-    """Decompose model−breakeven into (expectations gap, implied premium).
+    """Compare the model's near-term inflation to the shortest market breakeven.
 
     Breakeven = market expected inflation + inflation-risk premium + indexed-bond
-    scarcity premium. If the model is a cleaner expectations proxy, then
-        premium ≈ breakeven − model.
-    Returns None until the breakeven slot is populated.
+    scarcity premium. The model's clean output is 12-month inflation, while the
+    shortest indexed bond (RIKS) matures ~4y out, so this compares the model's
+    near-term call to the SHORTEST available breakeven and flags the horizon gap;
+    the difference (breakeven − model) is an indicative premium/expectations wedge,
+    not an exact decomposition. Returns None until the breakeven slot is populated.
     """
     be = load_breakeven()
     if be.empty:
         return None
-    latest = be[be.date == be.date.max()]
-    row = latest.iloc[(latest.horizon_yrs - horizon_yrs).abs().argmin()]
+    latest = be[be.date == be.date.max()].sort_values("horizon_yrs")
+    row = latest.iloc[0]  # shortest available horizon (nearest the model's horizon)
     breakeven = float(row.breakeven_pct)
     return {"model_yoy": model_yoy_12m, "breakeven": breakeven,
-            "implied_premium": breakeven - model_yoy_12m, "horizon_yrs": row.horizon_yrs}
+            "implied_wedge": breakeven - model_yoy_12m,
+            "breakeven_horizon_yrs": float(row.horizon_yrs),
+            "curve": latest[["horizon_yrs", "breakeven_pct"]].to_dict("records")}
 
 
 def write_templates():

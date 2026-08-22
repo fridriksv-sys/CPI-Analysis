@@ -25,5 +25,6 @@ structural changes. Hard rules:
 - All 7 phases live. Modules: ingest/px_client (Hagstofa), fuel (Gasvaktin),
   airfares (Icelandair SSR via curl_cffi), groceries (Krónan mirror), hms+rent
   (CP042), sedlabanki (FX)+worldfood+blocks (Phase 5), topdown+reconcile (MinT),
-  backtest+benchmarks+report (Phase 7). Remaining data dep: breakeven feed
-  (LSEG/Keldan) into data/benchmarks/breakeven.csv.
+  backtest+benchmarks+report (Phase 7), lanamal (RIKB/RIKS breakeven, live).
+  Breakeven from lanamal.is LoadChartData API -> data/benchmarks/breakeven.csv
+  (refresh: scripts/refresh_breakeven.py). Optional slot left: analyst_forecasts.csv.
