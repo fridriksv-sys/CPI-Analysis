@@ -278,20 +278,73 @@ with tab_rep:
 
     @st.cache_data(ttl=3600, show_spinner="Bý til mánaðarskýrslu ...")
     def _monthly():
-        rep = _report.build_report()
-        return _report.to_markdown(rep), rep["waterfall"], rep["verdtrygging"]
+        return _report.build_report()
 
-    md, waterfall, vt = _monthly()
-    st.markdown(md)
-    st.subheader("Framlag eftir drifkrafti (12m, pp)")
-    d = waterfall.sort_values("framlag_pp")
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    ax.barh(d.block, d.framlag_pp,
-            color=[C["red"] if v < 0 else C["blue"] for v in d.framlag_pp], height=0.6)
-    for i, v in enumerate(d.framlag_pp):
-        ax.text(v + (0.02 if v >= 0 else -0.02), i, f"{v:+.2f}", va="center",
-                ha="left" if v >= 0 else "right", fontsize=9)
-    ax.axvline(0, color=C["black"], lw=0.8)
-    ax.grid(axis="y", alpha=0)
+    rep = _monthly()
+
+    # --- 1) Predicted next month's CPI -------------------------------------
+    st.header(f"1 · Næsti mánuður — {rep['nowcast_month']}")
+    nm = rep["nowcast_month"]
+    next_index = idx_hist.iloc[-1] * (1 + rep["nowcast_mm"] / 100)
+    yy_next = (next_index / idx_hist.loc[nm - 12] - 1) * 100
+    a, b, c = st.columns(3)
+    a.metric(f"Núspá m/m ({nm})", f"{rep['nowcast_mm']:+.2f}%")
+    b.metric("VNV vísitala (spá)", f"{next_index:.1f}", f"{rep['nowcast_mm']:+.2f}%")
+    c.metric("12M verðbólga við birtingu", f"{yy_next:.1f}%")
+    st.caption("Núspá = reconciled (MinT) h=1. Söfnunargluggi Hagstofunnar er 1.–15.; "
+               "eldsneyti er þegar mælt, önnur mæld gögn bætast við fram að birtingu.")
+
+    # --- 2) Next 12 months trend ------------------------------------------
+    st.header("2 · Næstu 12 mánuðir — leitni")
+    lo, hi = rep["band90"]
+    m1, m2 = st.columns(2)
+    m1.metric("Verðbólga eftir 12 mánuði", f"{rep['yy_12m']:.1f}%")
+    m2.metric("90% óvissubil (MinT)", f"{lo:.1f}% – {hi:.1f}%")
+    yy_path = rep["yy_path"]; cum_sd = np.sqrt((rep["rec_sd"] ** 2).cumsum())
+    hist_yy = head[("CPI", "change_A")]["2022":]
+    x = yy_path.index.to_timestamp()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(hist_yy.index.to_timestamp(), hist_yy, color=C["black"], lw=1.8, label="raun")
+    ax.fill_between(x, yy_path - 1.64 * cum_sd, yy_path + 1.64 * cum_sd, color=C["sky"], alpha=0.25, lw=0, label="90% bil")
+    ax.fill_between(x, yy_path - 0.67 * cum_sd, yy_path + 0.67 * cum_sd, color=C["sky"], alpha=0.45, lw=0, label="50% bil")
+    ax.plot(x, yy_path, color=C["blue"], lw=2.2, label="spá (reconciled)")
+    ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6)
+    ax.set_title("Verðbólguspá y/y (%)"); ax.legend(frameon=False, ncols=4)
     st.pyplot(fig, width="stretch")
-    st.download_button("Sækja skýrslu (markdown)", md, file_name=f"vnv_report_{last_m}.md")
+
+    # --- 3) Each underlying: trend + how it was derived -------------------
+    st.header("3 · Undirliðir — leitni og aðferð")
+    st.caption("Hver liður sem drífur spána: söguleg vísitala (blátt) og 12-mánaða "
+               "spá (appelsínugult, brotalína), framlag til verðbólgu og lýsing á aðferð.")
+    details = rep["details"]
+    cur_block = None
+    for det in details:
+        if det["block"] != cur_block:
+            cur_block = det["block"]
+            lab_is, lab_en = _report.BLOCK_LABELS.get(cur_block, (cur_block, cur_block))
+            st.subheader(f"{lab_is} / {lab_en}")
+        title = (f"{det['code']} · {det['heiti'][:46]}  —  vægi {det['weight']:.1f}% · "
+                 f"framlag 12m {det['contrib12']:+.2f}pp · næsti mán. {det['mm_next']:+.2f}%")
+        with st.expander(title):
+            cc1, cc2 = st.columns([3, 2])
+            with cc1:
+                hi_, fi_ = det["hist_index"], det["fcst_index"]
+                figc, axc = plt.subplots(figsize=(5.4, 2.6))
+                if len(hi_):
+                    axc.plot(hi_.index.to_timestamp(), hi_.values, color=C["blue"], lw=1.8, label="raun")
+                    # connect last actual to the forecast
+                    fx_idx = [hi_.index[-1]] + list(fi_.index)
+                    fx_val = [hi_.iloc[-1]] + list(fi_.values)
+                    axc.plot([p.to_timestamp() for p in fx_idx], fx_val,
+                             color=C["orange"], lw=1.8, ls="--", label="spá")
+                axc.set_title(f"{det['code']} vísitala", fontsize=9)
+                axc.legend(frameon=False, fontsize=8)
+                axc.tick_params(labelsize=7)
+                st.pyplot(figc, width="stretch")
+            with cc2:
+                st.markdown(f"**Aðferð / Method:** {det['method_label']}")
+                st.caption(det["method_desc"])
+
+    st.divider()
+    st.download_button("Sækja samantekt (markdown)", _report.to_markdown(rep),
+                       file_name=f"vnv_report_{last_m}.md")
