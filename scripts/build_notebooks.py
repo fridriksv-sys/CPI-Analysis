@@ -1417,12 +1417,17 @@ fig, ax = plt.subplots()
 ax.plot(cur.horizon_yrs, cur.breakeven, color=C["green"], lw=2, marker="o", label="verðbólguálag (RIKB−RIKS)")
 ax.plot([t["horizon_yrs"] for t in term], [t["avg_infl"] for t in term],
         color=C["blue"], lw=2, marker="D", ms=7, label="módel meðalverðbólga (1/2/3 ár)")
-ax.plot(cur.horizon_yrs, cur.real, color=C["sky"], lw=1.2, ls="--", label="verðtryggð raunávöxtun (RIKS)")
+for src, mk, col in [("Íslandsbanki", "s", C["orange"]), ("Landsbankinn", "^", C["red"])]:
+    pts = [a for a in (mvb.get("analyst_term") or []) if a["source"] == src]
+    if pts:
+        ax.scatter([p["horizon_yrs"] for p in pts], [p["yoy_pct"] for p in pts],
+                   marker=mk, s=70, color=col, zorder=5, label=f"{src} (ársspá)")
 ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6)
-ax.set_xlabel("sjóndeildarhringur (ár)"); ax.set_ylabel("meðal-ársverðbólga / raunávöxtun %")
-ax.set_title("Verðbólga eftir sjóndeildarhring: módel vs markaður (term-matched)")
-ax.legend(frameon=False)
+ax.set_xlabel("sjóndeildarhringur (ár)"); ax.set_ylabel("meðal-ársverðbólga %")
+ax.set_title("Verðbólga eftir sjóndeildarhring: módel vs greiningaraðilar vs markaður")
+ax.legend(frameon=False, fontsize=8)
 plt.show()
+print("At 1yr: model", term[0]["avg_infl"], "%  vs banks ~3.3-3.6% -> model stickier (rent).")
 '''),
 ("md", """\
 ## Model vs bank analysts

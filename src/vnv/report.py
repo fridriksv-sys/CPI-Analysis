@@ -169,6 +169,8 @@ def build_report(horizons: int = 36) -> dict:
 
     # model vs breakeven (if slot populated) — term-matched
     mvb = benchmarks.model_vs_breakeven(model_term)
+    if mvb is not None:
+        mvb["analyst_term"] = benchmarks.analyst_term_structure(last_m.year)
     # model vs bank analysts (if slot populated)
     analysts = benchmarks.analyst_comparison(head, nowcast_mm, last_m + 1)
     # y/y over the whole path: for months >12 ahead the base is the forecast
@@ -266,6 +268,14 @@ def to_markdown(rep: dict) -> str:
             mh = min(term, key=lambda y: abs(y - r["horizon_yrs"])) if term else None
             mval = f"{term[mh]:.2f}" if mh is not None else "—"
             lines.append(f"| {r['horizon_yrs']:.0f} | {mval} | {r['breakeven_pct']:.2f} |")
+        at = mvb.get("analyst_term")
+        if at:
+            lines += ["", "Greiningaraðilar — ársspá kortlögð á sjóndeildarhring / analyst "
+                      "annual forecasts by years-ahead:", "",
+                      "| Aðili / Source | Ár / Year | Sjóndeild (ár) | Spá y/y (%) |",
+                      "|---|---|---|---|"]
+            for a in at:
+                lines.append(f"| {a['source']} | {a['year']} | {a['horizon_yrs']} | {a['yoy_pct']:.1f} |")
 
     an = rep.get("analysts")
     lines += ["", "## Módel vs greiningaraðilar / Model vs bank analysts", ""]

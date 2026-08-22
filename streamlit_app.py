@@ -291,20 +291,30 @@ with tab_rep:
         k3.metric("Fleygur (álag − módel)", f"{mvb['implied_wedge']:+.2f}pp")
         hs = [r["horizon_yrs"] for r in cc]; be = [r["breakeven_pct"] for r in cc]
         mh = [t["horizon_yrs"] for t in term]; mv = [t["avg_infl"] for t in term]
-        fig, ax = plt.subplots(figsize=(9, 3.4))
+        fig, ax = plt.subplots(figsize=(9, 3.6))
         ax.plot(hs, be, color=C["green"], lw=2, marker="o", label="markaðsálag (RIKB−RIKS)")
         ax.plot(mh, mv, color=C["blue"], lw=2, marker="D", ms=7, label="módel meðalverðbólga (1/2/3 ár)")
+        at = mvb.get("analyst_term")
+        if at:
+            amark = {"Íslandsbanki": ("s", C["orange"]), "Landsbankinn": ("^", C["red"])}
+            for src in sorted({a["source"] for a in at}):
+                pts = [a for a in at if a["source"] == src]
+                mk, col = amark.get(src, ("v", C["red"]))
+                ax.scatter([p["horizon_yrs"] for p in pts], [p["yoy_pct"] for p in pts],
+                           marker=mk, s=70, color=col, zorder=5, label=f"{src} (ársspá)")
         ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6, label="markmið 2,5%")
         ax.set_xlabel("sjóndeildarhringur (ár)"); ax.set_ylabel("meðal-ársverðbólga %")
-        ax.set_title("Verðbólga eftir sjóndeildarhring: módel vs markaður")
-        ax.legend(frameon=False, fontsize=8)
+        ax.set_title("Verðbólga eftir sjóndeildarhring: módel vs greiningaraðilar vs markaður")
+        ax.legend(frameon=False, fontsize=8, ncols=2)
         st.pyplot(fig, width="stretch")
-        st.caption("Nú samræmdir sjóndeildarhringar: T-ára álag ≈ meðalverðbólga markaðar "
-                   "næstu T ár, borið saman við T-ára meðalverðbólgu módelsins (úr 36-mán. "
-                   "brautinni). Álag umfram módel = áhættu- + skortsálag verðtryggðra bréfa — "
-                   "þar liggur h=3–12 forskotið. / Horizon-matched: a T-year breakeven ≈ the "
-                   "market's average inflation over T years, vs the model's T-year average. "
-                   "Breakeven above the model is the risk + scarcity premium.")
+        st.caption("Samræmdir sjóndeildarhringar: T-ára álag ≈ meðalverðbólga markaðar næstu T ár; "
+                   "greiningaraðilar = ársspár banka (þjóðhagsspá/hagspá) kortlagðar á ár-fram "
+                   "(2027≈1 ár). Módelið sér þrálátari verðbólgu en bæði bankarnir og markaðurinn "
+                   "á 1 ári (leiguígildi). Athuga: bankaspár eru uppfærðar ~2x á ári (dagsetning í "
+                   "töflu). / Horizon-matched: T-year breakeven ≈ market avg inflation over T years; "
+                   "analyst points are the banks' annual macro forecasts mapped to years-ahead. The "
+                   "model sees stickier 1-year inflation than both banks and the market (rent "
+                   "persistence). Bank forecasts update ~2×/yr — see dates in the table.")
 
     # --- 5) Model vs bank analysts ---------------------------------------
     st.header("5 · Módel vs greiningaraðilar")

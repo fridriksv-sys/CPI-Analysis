@@ -150,7 +150,12 @@ scarcity premia, which is where the h=3–12 edge lives).
 Bank-analyst forecasts (Íslandsbanki Greining, Landsbankinn) are compared against
 the model and realized actuals — real published figures in
 `data/benchmarks/analyst_forecasts.csv` (one row per source per print, added each
-month from the banks' forecast notes ~1 week before release). The report's
+month from the banks' forecast notes ~1 week before release). Their longer-horizon
+**annual** forecasts (from the banks' semi-annual þjóðhagsspá/hagspá) are in
+`data/benchmarks/analyst_annual.csv` and overlaid on the Section-4 term structure
+(mapped to years-ahead), so the model's 1/2/3-year average sits next to each bank's
+forward view and the market breakeven — the model reads ~4.1% at 1yr vs the banks'
+3.3–3.6%, its rent-persistence view again. The report's
 "Módel vs greiningaraðilar" section and dashboard Section 5 show the upcoming-print
 model-vs-consensus gap and each source's realized track record. As the plan
 predicts, analysts are hard to beat at h=1 (they run the same public scrapes) — the

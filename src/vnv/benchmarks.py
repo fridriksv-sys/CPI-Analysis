@@ -24,6 +24,7 @@ DATA = REPO_ROOT / "data" / "benchmarks"
 BREAKEVEN_COLS = ["date", "horizon_yrs", "breakeven_pct"]
 ANALYST_COLS = ["forecast_date", "target_month", "source", "mm_pct", "yoy_pct"]
 PENINGAMAL_COLS = ["forecast_date", "target_quarter", "yoy_pct"]
+ANALYST_ANNUAL_COLS = ["forecast_date", "source", "year", "yoy_pct"]
 
 
 def load_breakeven() -> pd.DataFrame:
@@ -48,6 +49,34 @@ def load_analyst_forecasts() -> pd.DataFrame:
     df = pd.read_csv(f, parse_dates=["forecast_date"])
     df["manudur"] = pd.PeriodIndex(df.target_month.astype(str), freq="M")
     return df
+
+
+def load_analyst_annual() -> pd.DataFrame:
+    """Bank analysts' ANNUAL (calendar-year) inflation forecasts, from their
+    semi-annual macro forecasts (Íslandsbanki þjóðhagsspá, Landsbankinn hagspá).
+    Populate data/benchmarks/analyst_annual.csv. Real published figures only."""
+    f = DATA / "analyst_annual.csv"
+    if not f.exists():
+        return pd.DataFrame(columns=ANALYST_ANNUAL_COLS)
+    return pd.read_csv(f, parse_dates=["forecast_date"])
+
+
+def analyst_term_structure(base_year: int) -> list[dict] | None:
+    """Named analysts' annual forecasts mapped to years-ahead (year − base_year),
+    latest vintage per source, for overlay on the term-structure comparison.
+    Calendar year Y ≈ (Y − base_year) years ahead (2027 ≈ 1yr from mid-2026)."""
+    aa = load_analyst_annual()
+    if aa.empty:
+        return None
+    out = []
+    for src, d in aa.groupby("source"):
+        d = d[d.forecast_date == d.forecast_date.max()]
+        for r in d.itertuples():
+            h = int(r.year) - base_year
+            if h >= 1:  # only forward years (1yr, 2yr, 3yr ahead)
+                out.append({"source": src, "horizon_yrs": h, "yoy_pct": float(r.yoy_pct),
+                            "year": int(r.year), "forecast_date": r.forecast_date})
+    return out or None
 
 
 def load_peningamal() -> pd.DataFrame:
