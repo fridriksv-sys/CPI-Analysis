@@ -82,8 +82,8 @@ st.title("Vísitala neysluverðs — spálíkan")
 st.caption(f"Nýjasta birting: {last_m} · VNV {idx_hist.iloc[-1]:.1f} · "
            f"12M verðbólga {head[('CPI', 'change_A')].iloc[-1]:.1f}%")
 
-tab_now, tab_fc, tab_w, tab_gate, tab_feed = st.tabs(
-    ["Núspá", "12 mánaða spá", "Vogir", "Endurbygging (gátt)", "Gagnalindir"])
+tab_now, tab_fc, tab_w, tab_gate, tab_feed, tab_rep = st.tabs(
+    ["Núspá", "12 mánaða spá", "Vogir", "Endurbygging (gátt)", "Gagnalindir", "Skýrsla"])
 
 # ---------------------------------------------------------------- tab: nowcast
 with tab_now:
@@ -235,6 +235,9 @@ with tab_feed:
          f"nýjast: {sedlabanki.load_fx().index[-1]} · FX-áhrif á CP01/CP02/CP03/CP071"),
         ("Laun — Hagstofa launavísitala", "✅ virk",
          f"nýjast: {ingest.wages_mm().dropna().index[-1]} · kjarasamningar í wage_calendar.yaml"),
+        ("Heimsmatvöruverð — FAO", "✅ virk", "prófað fyrir CP01 — of veikt, sleppt"),
+        ("Breakeven (RIKS/RIKB)", "🔴 vantar feed",
+         "data/benchmarks/breakeven.csv — þarf LSEG/Keldan; samanburðarkóði tilbúinn"),
         ("Matvörur — Krónan (kronan_price_history í Supabase)", "🟡 söfnun hafin",
          f"{n_snap} raðir í staðbundnu afriti — keyra scripts/export_kronan_history.py; "
          "kvörðun þegar saga spannar ≥2 söfnunarglugga"),
@@ -263,3 +266,27 @@ with tab_feed:
     ax.set_xlabel("scraped m/m %")
     ax.set_ylabel("published IS0722 m/m %")
     st.pyplot(fig, width="content")
+
+# ---------------------------------------------------------------- tab: report
+with tab_rep:
+    from vnv import report as _report
+
+    @st.cache_data(ttl=3600, show_spinner="Bý til mánaðarskýrslu ...")
+    def _monthly():
+        rep = _report.build_report()
+        return _report.to_markdown(rep), rep["waterfall"], rep["verdtrygging"]
+
+    md, waterfall, vt = _monthly()
+    st.markdown(md)
+    st.subheader("Framlag eftir drifkrafti (12m, pp)")
+    d = waterfall.sort_values("framlag_pp")
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    ax.barh(d.block, d.framlag_pp,
+            color=[C["red"] if v < 0 else C["blue"] for v in d.framlag_pp], height=0.6)
+    for i, v in enumerate(d.framlag_pp):
+        ax.text(v + (0.02 if v >= 0 else -0.02), i, f"{v:+.2f}", va="center",
+                ha="left" if v >= 0 else "right", fontsize=9)
+    ax.axvline(0, color=C["black"], lw=0.8)
+    ax.grid(axis="y", alpha=0)
+    st.pyplot(fig, width="stretch")
+    st.download_button("Sækja skýrslu (markdown)", md, file_name=f"vnv_report_{last_m}.md")

@@ -1310,8 +1310,139 @@ modelling one.
 """),
 ]
 
+# ============================================================================
+# Notebook 8 — backtest, benchmarks, monthly report (Phase 7)
+# ============================================================================
+nb8 = [
+("md", """\
+# 08 — Bakprófun, viðmið og mánaðarskýrsla (backtest, benchmarks, report — Phase 7)
+
+The final phase: an honest pseudo-real-time backtest by horizon against the plan's
+floors, an error decomposition showing *which block* drives misses, and the
+monthly one-pager output. Expanding window, refit each jump-off on data through
+t−1, aggregated with the weights published at t−1 — no look-ahead.
+"""),
+("code", BOOTSTRAP),
+("code", '''\
+from vnv import backtest, ingest
+head = ingest.load_headline()
+bt = backtest.run_backtest(start="2025-01", max_h=12)
+print(f"forecast rows: {len(bt)}   jump-offs: {bt.jump_off.nunique()}")
+'''),
+("md", """\
+## RMSE by horizon — vs the seasonal-naive floor
+
+The model beats the seasonal-naive floor at **every horizon h=2–12**. Only h=1 is
+(slightly) worse — the airfare-gated miss we already diagnosed: airfares (~4%,
+±10–20% swings) are still *collecting*, so at h=1 they run on the generic model.
+"""),
+("code", '''\
+rbh = backtest.rmse_by_horizon(bt)
+show = rbh[["n", "RMSE_model", "RMSE_seasonal_naive"]].copy()
+show["model beats floor"] = show.RMSE_model < show.RMSE_seasonal_naive
+display(show.round(3))
+
+fig, ax = plt.subplots()
+ax.plot(rbh.index, rbh.RMSE_model, color=C["blue"], lw=2, marker="o", ms=4, label="líkan / model")
+ax.plot(rbh.index, rbh.RMSE_seasonal_naive, color=C["orange"], lw=1.5, ls="--", marker="s", ms=3,
+        label="seasonal-naive floor")
+ax.set_xlabel("horizon (months)"); ax.set_ylabel("RMSE m/m (pp)")
+ax.set_title("Bakprófun eftir spálengd / backtest RMSE by horizon")
+ax.legend(frameon=False)
+plt.show()
+'''),
+("md", """\
+## h=12 y/y vs random-walk-on-y/y — on the regime the model is built for
+
+Over the full 2016–2025 sample the top-down alone fails to beat RW-on-y/y
+(Atkeson–Ohanian; notebook 07). But on the **post-2024 COICOP2018 regime the model
+is actually built for** — persistent rental-equivalence rent, the new
+classification — the full stack beats RW-on-y/y decisively.
+"""),
+("code", '''\
+yb = backtest.yoy_backtest(bt, head, max_h=12)
+if len(yb):
+    rm = np.sqrt(((yb.model_yoy - yb.actual_yoy) ** 2).mean())
+    rr = np.sqrt(((yb.rw_yoy - yb.actual_yoy) ** 2).mean())
+    print(f"h=12 y/y (n={len(yb)}, jump-offs {yb.jump_off.min()}..{yb.jump_off.max()}):")
+    print(f"  model RMSE = {rm:.3f}    RW-on-y/y RMSE = {rr:.3f}    "
+          f"{'MODEL WINS' if rm < rr else 'RW wins'}")
+    d = yb.copy(); d["jump_off"] = d.jump_off.astype(str)
+    display(d.round(2))
+'''),
+("md", """\
+## Which block drives the h=1 misses?
+
+The contribution-level decomposition confirms the plan's variance ranking:
+imported goods (clothing *útsölur* swings) and airfares (in *other/generic* until
+calibrated) are the largest h=1 error sources; wages/domestic services the
+smallest. This is the map for where to spend the next unit of effort.
+"""),
+("code", '''\
+be = backtest.h1_block_error()
+display(be.round(4))
+fig, ax = plt.subplots()
+b = be.sort_values("rmse")
+ax.barh(b.index, b["rmse"], color=C["blue"], height=0.6)
+ax.set_xlabel("h=1 framlagsvilla RMSE (pp á heildarvísitölu)")
+ax.set_title("Villudreifing eftir drifkrafti / h=1 error by driver block")
+ax.grid(axis="y", alpha=0)
+plt.tight_layout(); plt.show()
+'''),
+("md", """\
+## Benchmarks that need a market feed
+
+The plan's remaining benchmarks are not machine-accessible here:
+- **Breakeven inflation (RIKS vs RIKB)** — the tradeable benchmark and the whole
+  economic point (the h=3–12 edge, where breakevens carry an inflation-risk
+  premium and an indexed-bond scarcity premium). Clean source: a market feed
+  (LSEG connector — needs auth; or Keldan/Kodiak). Seðlabanki publishes
+  verðbólguálag only inside monetary-policy reports, not the open data API.
+- **Bank analysts** (Íslandsbanki Greining, Landsbankinn, Arion) and **Seðlabanki
+  Peningamál** — published in notes/PDFs.
+
+Both are wired to committed CSV slots (`data/benchmarks/`). The comparison code is
+ready; only the data is pending — populate the slot and the model-vs-breakeven
+decomposition lights up automatically.
+"""),
+("code", '''\
+from vnv import benchmarks
+print("breakeven rows:", len(benchmarks.load_breakeven()),
+      "| analyst rows:", len(benchmarks.load_analyst_forecasts()))
+print("slot:", benchmarks.write_templates())
+print("model_vs_breakeven:", benchmarks.model_vs_breakeven(4.4))  # None until populated
+'''),
+("md", "## The monthly one-pager"),
+("code", '''\
+from vnv import report
+rep = report.build_report()
+from IPython.display import Markdown
+Markdown(report.to_markdown(rep))
+'''),
+("md", """\
+## The model is complete — all seven phases
+
+| Phase | Deliverable | Status |
+|---|---|---|
+| 1 | Ingestion + weight panel | ✅ |
+| 2 | Index reconstruction (hard gate) | ✅ all gates pass |
+| 3 | Observable nowcast (fuel live; airfares + groceries collecting) | ✅ |
+| 4 | Imputed-rent model (HMS) | ✅ beats RW/AR(1) |
+| 5 | Driver blocks (FX pass-through) + wage calendar | ✅ |
+| 6 | Top-down + MinT reconciliation | ✅ |
+| 7 | Backtest, benchmarks, monthly report | ✅ |
+
+**The one remaining data dependency** is the breakeven feed (LSEG/Keldan) for the
+tradeable-benchmark comparison — a data-access step, not a modelling one. The two
+observable feeds still maturing (airfares, groceries) will sharpen h=1 as their
+collection windows accumulate. Everything else is live end to end: from Hagstofa
+PxWeb through reconstruction, component models, observables, reconciliation, to
+the monthly one-pager.
+"""),
+]
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["1", "2", "3", "4", "5", "6", "7"]
+    which = sys.argv[1:] or ["1", "2", "3", "4", "5", "6", "7", "8"]
     if "1" in which:
         build(NB_DIR / "01_data_and_weights.ipynb", nb1)
     if "2" in which:
@@ -1326,3 +1457,5 @@ if __name__ == "__main__":
         build(NB_DIR / "06_driver_blocks.ipynb", nb6)
     if "7" in which:
         build(NB_DIR / "07_reconciliation.ipynb", nb7)
+    if "8" in which:
+        build(NB_DIR / "08_backtest_report.ipynb", nb8)

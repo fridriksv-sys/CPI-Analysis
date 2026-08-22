@@ -20,4 +20,10 @@ structural changes. Hard rules:
 - API precision ceiling: 1dp indices, 2dp weights/changes. All tolerances must be
   rounding-aware; a "perfect" backtest (<0.08pp h=1 RMSE) means look-ahead leakage.
 - Run venv python: `.venv\Scripts\python.exe`. Rebuild notebooks:
-  `.venv\Scripts\python.exe scripts\build_notebooks.py [1|2|3]`.
+  `.venv\Scripts\python.exe scripts\build_notebooks.py [1..8]`. Dashboard:
+  `.venv\Scripts\python.exe -m streamlit run streamlit_app.py`.
+- All 7 phases live. Modules: ingest/px_client (Hagstofa), fuel (Gasvaktin),
+  airfares (Icelandair SSR via curl_cffi), groceries (Krónan mirror), hms+rent
+  (CP042), sedlabanki (FX)+worldfood+blocks (Phase 5), topdown+reconcile (MinT),
+  backtest+benchmarks+report (Phase 7). Remaining data dep: breakeven feed
+  (LSEG/Keldan) into data/benchmarks/breakeven.csv.

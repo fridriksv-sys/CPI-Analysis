@@ -18,6 +18,7 @@ forecast layer is the v0 baseline of Phase 5.
 | `notebooks/05_imputed_rent.ipynb` | Phase 4: HMS new-contract rents → Hagstofa stock-based CP042 as a distributed lag; post-break EWMA + HMS tilt beats RW and AR(1) OOS; regime-break diagnostic; 12-month rent path |
 | `notebooks/06_driver_blocks.ipynb` | Phase 5: FX pass-through into food/imported goods (lands in the plan's 0.2–0.4 range), validated OOS as a shrunk tilt; wage calendar for kjarasamningar steps; full h=1 stack |
 | `notebooks/07_reconciliation.ipynb` | Phase 6: top-down headline model + MinT reconciliation of bottom-up and top-down; exact aggregation identity; fan chart from the reconciled covariance; honest h=12 y/y (Atkeson–Ohanian) |
+| `notebooks/08_backtest_report.ipynb` | Phase 7: pseudo-real-time backtest by horizon (beats seasonal-naive h=2–12; h=12 y/y beats RW on the post-2024 regime), block error decomposition, benchmark slots, and the monthly one-pager |
 
 Notebooks are committed **with outputs** so they read like a report. To re-run:
 
@@ -117,7 +118,24 @@ pulls bottom-up → top-down at longer horizons, as designed. h=12 y/y beats
 RW-on-y/y ex-surge but not full-sample (Atkeson–Ohanian; reported honestly, not
 tuned). Integrated into the dashboard "12 mánaða spá" tab.
 
-## Not yet built (Phase 7)
+## Phase 7 status — done
 
-Benchmark table: bank analysts, Seðlabanki Peningamál, and breakeven inflation
-(RIKS vs RIKB) — the last needs the market feed (LSEG connector, or Keldan/Kodiak).
+Pseudo-real-time backtest by horizon (`vnv/backtest.py`): beats the seasonal-naive
+floor at h=2–12; h=12 y/y RMSE 0.24 vs RW-on-y/y 1.15 on the post-2024 regime the
+model targets (full-sample fails Atkeson–Ohanian, reported honestly). h=1 block
+error decomposition confirms the plan's variance ranking (imported-goods útsölur +
+airfares dominate). Monthly one-pager (`vnv/report.py`, bilingual): nowcast,
+12-month path with MinT band, contribution waterfall by driver block, verðtrygging
+(t+2) path, model-vs-breakeven — in the dashboard "Skýrsla" tab and downloadable.
+Benchmark slots (`vnv/benchmarks.py`, `data/benchmarks/`) ready for the breakeven
+and analyst feeds.
+
+## One remaining data dependency
+
+Breakeven inflation (RIKS vs RIKB) — the tradeable benchmark — needs a market feed
+(authorize the LSEG connector, or a Keldan/Kodiak feed) dropped into
+`data/benchmarks/breakeven.csv`; the model-vs-breakeven decomposition then lights
+up automatically. The airfare and grocery observable feeds keep maturing (they
+sharpen h=1 as their collection windows accumulate).
+
+**All seven plan phases are implemented and live end to end.**
