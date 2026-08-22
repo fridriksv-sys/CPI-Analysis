@@ -1404,19 +1404,23 @@ lanamal.update_breakeven_slot()               # fetch RIKB/RIKS, write the slot
 cur = lanamal.breakeven_curve()
 display(cur)
 rep = report.build_report()                   # reused by the one-pager below
-mvb = benchmarks.model_vs_breakeven(rep["yy_12m"])
-print(f"model 12m: {rep['yy_12m']:.2f}%  |  shortest breakeven "
-      f"({mvb['breakeven_horizon_yrs']:.0f}yr): {mvb['breakeven']:.2f}%  |  "
-      f"wedge: {mvb['implied_wedge']:+.2f}pp")
+mvb = rep["model_vs_breakeven"]               # term-matched (from the 36-month path)
+print("model inflation term structure (avg annual):",
+      {int(t["horizon_yrs"]): t["avg_infl"] for t in mvb["model_term"]})
+print(f"term-matched: model {mvb['model_horizon_yrs']:.0f}yr avg {mvb['model_avg']:.2f}%  "
+      f"vs {mvb['breakeven_horizon_yrs']:.0f}yr breakeven {mvb['breakeven']:.2f}%  "
+      f"-> wedge {mvb['implied_wedge']:+.2f}pp (risk + scarcity premium)")
 '''),
 ("code", '''\
+term = mvb["model_term"]
 fig, ax = plt.subplots()
 ax.plot(cur.horizon_yrs, cur.breakeven, color=C["green"], lw=2, marker="o", label="verðbólguálag (RIKB−RIKS)")
-ax.plot(cur.horizon_yrs, cur.nominal, color=C["orange"], lw=1.3, ls="--", label="óverðtryggð (RIKB)")
-ax.plot(cur.horizon_yrs, cur.real, color=C["blue"], lw=1.3, ls="--", label="verðtryggð (RIKS)")
+ax.plot([t["horizon_yrs"] for t in term], [t["avg_infl"] for t in term],
+        color=C["blue"], lw=2, marker="D", ms=7, label="módel meðalverðbólga (1/2/3 ár)")
+ax.plot(cur.horizon_yrs, cur.real, color=C["sky"], lw=1.2, ls="--", label="verðtryggð raunávöxtun (RIKS)")
 ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6)
-ax.set_xlabel("ár til gjalddaga"); ax.set_ylabel("%")
-ax.set_title("Markaðsávöxtun og verðbólguálag (lanamal.is)")
+ax.set_xlabel("sjóndeildarhringur (ár)"); ax.set_ylabel("meðal-ársverðbólga / raunávöxtun %")
+ax.set_title("Verðbólga eftir sjóndeildarhring: módel vs markaður (term-matched)")
 ax.legend(frameon=False)
 plt.show()
 '''),

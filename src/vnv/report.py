@@ -159,8 +159,16 @@ def build_report(horizons: int = 36) -> dict:
     vt.index = path_idx.index[:12] + 2
     vt.index.name = "verdtryggingarmanudur"
 
-    # model vs breakeven (if slot populated)
-    mvb = benchmarks.model_vs_breakeven(yy_12m)
+    # model inflation TERM STRUCTURE: average annual inflation over 1/2/3 years,
+    # term-matched to the breakeven curve (a T-year breakeven ~ avg inflation to T).
+    def _avg_infl(months: int) -> float:
+        months = min(months, len(path_idx))
+        yrs = months / 12.0
+        return (float(path_idx.iloc[months - 1] / idx_hist.iloc[-1]) ** (1 / yrs) - 1) * 100
+    model_term = {yr: round(_avg_infl(yr * 12), 2) for yr in (1, 2, 3)}
+
+    # model vs breakeven (if slot populated) — term-matched
+    mvb = benchmarks.model_vs_breakeven(model_term)
     # model vs bank analysts (if slot populated)
     analysts = benchmarks.analyst_comparison(head, nowcast_mm, last_m + 1)
     # y/y over the whole path: for months >12 ahead the base is the forecast
@@ -238,22 +246,26 @@ def to_markdown(rep: dict) -> str:
         lines.append(f"| {m} | {r.VNV_spa:.1f} |")
     lines.append("| … | … |")
     mvb = rep["model_vs_breakeven"]
-    lines += ["", "## Módel vs verðbólguálag / Model vs breakeven", ""]
+    lines += ["", "## Módel vs verðbólguálag / Model vs breakeven (term-matched)", ""]
     if mvb is None:
         lines.append("_Breakeven slot óupppfyllt — keyra `lanamal.update_breakeven_slot()`._")
     else:
-        lines.append(f"- Módel 12-mán. verðbólga / model 12-month: {mvb['model_yoy']:.2f}%  ")
+        lines.append(f"- Módel {mvb['model_horizon_yrs']:.0f}-ára meðalverðbólga / "
+                     f"{mvb['model_horizon_yrs']:.0f}yr avg: {mvb['model_avg']:.2f}%  ")
         lines.append(f"- Markaðs-verðbólguálag (RIKB−RIKS), "
-                     f"stysta {mvb['breakeven_horizon_yrs']:.0f}á / shortest breakeven: "
-                     f"{mvb['breakeven']:.2f}%  ")
+                     f"~{mvb['breakeven_horizon_yrs']:.0f}á / breakeven: {mvb['breakeven']:.2f}%  ")
         lines.append(f"- Fleygur / wedge (álag − módel): {mvb['implied_wedge']:+.2f}pp "
-                     "_(ólíkir sjóndeildarhringir; álag ber áhættu- og skortsálag / "
-                     "horizons differ; breakeven carries risk & scarcity premia)_")
+                     "_(álag ber áhættu- og skortsálag / breakeven carries risk & "
+                     "scarcity premia — þar liggur h=3–12 forskotið)_")
         lines.append("")
-        lines.append("| Sjóndeild. / Horizon (yr) | Verðbólguálag / Breakeven (%) |")
-        lines.append("|---|---|")
+        lines.append("| Sjóndeild. / Horizon (yr) | Módel meðaltal / Model avg (%) | "
+                     "Verðbólguálag / Breakeven (%) |")
+        lines.append("|---|---|---|")
+        term = {t["horizon_yrs"]: t["avg_infl"] for t in mvb["model_term"]}
         for r in mvb["curve"]:
-            lines.append(f"| {r['horizon_yrs']:.0f} | {r['breakeven_pct']:.2f} |")
+            mh = min(term, key=lambda y: abs(y - r["horizon_yrs"])) if term else None
+            mval = f"{term[mh]:.2f}" if mh is not None else "—"
+            lines.append(f"| {r['horizon_yrs']:.0f} | {mval} | {r['breakeven_pct']:.2f} |")
 
     an = rep.get("analysts")
     lines += ["", "## Módel vs greiningaraðilar / Model vs bank analysts", ""]

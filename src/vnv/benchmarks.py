@@ -125,25 +125,34 @@ def analyst_comparison(head, model_nowcast: float, nowcast_month) -> dict | None
     return {"current": current, "track": track, "detail": detail}
 
 
-def model_vs_breakeven(model_yoy_12m: float, horizon_yrs: float = 1.0):
-    """Compare the model's near-term inflation to the shortest market breakeven.
+def model_vs_breakeven(model_term: dict):
+    """Compare the model's inflation TERM STRUCTURE to the market breakeven curve.
 
-    Breakeven = market expected inflation + inflation-risk premium + indexed-bond
-    scarcity premium. The model's clean output is 12-month inflation, while the
-    shortest indexed bond (RIKS) matures ~4y out, so this compares the model's
-    near-term call to the SHORTEST available breakeven and flags the horizon gap;
-    the difference (breakeven − model) is an indicative premium/expectations wedge,
-    not an exact decomposition. Returns None until the breakeven slot is populated.
+    A T-year breakeven ≈ the market's average annual inflation over [now, now+T]
+    (nominal RIKB − real RIKS yield), so the horizon-matched comparison is the
+    model's own average annual inflation over the same horizon. `model_term` maps
+    {years: avg annual inflation %} (e.g. from the 36-month path, 1/2/3 years).
+
+    The wedge is taken at the shortest breakeven (~4y) matched to the model's
+    longest term (3y) — the closest the horizons align. Breakeven above the model
+    is the inflation-risk + indexed-bond-scarcity premium (where the h=3–12 edge
+    lives); it is an indicative wedge, not an exact decomposition. Returns None
+    until the breakeven slot is populated.
     """
     be = load_breakeven()
-    if be.empty:
+    if be.empty or not model_term:
         return None
     latest = be[be.date == be.date.max()].sort_values("horizon_yrs")
-    row = latest.iloc[0]  # shortest available horizon (nearest the model's horizon)
+    row = latest.iloc[0]                       # shortest breakeven (~4y)
+    be_h = float(row.horizon_yrs)
+    myr = min(model_term, key=lambda y: abs(y - be_h))   # nearest model term (3y)
+    model_avg = float(model_term[myr])
     breakeven = float(row.breakeven_pct)
-    return {"model_yoy": model_yoy_12m, "breakeven": breakeven,
-            "implied_wedge": breakeven - model_yoy_12m,
-            "breakeven_horizon_yrs": float(row.horizon_yrs),
+    return {"model_avg": model_avg, "model_horizon_yrs": float(myr),
+            "breakeven": breakeven, "breakeven_horizon_yrs": be_h,
+            "implied_wedge": breakeven - model_avg,
+            "model_term": [{"horizon_yrs": float(y), "avg_infl": float(v)}
+                           for y, v in sorted(model_term.items())],
             "curve": latest[["horizon_yrs", "breakeven_pct"]].to_dict("records")}
 
 

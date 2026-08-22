@@ -282,25 +282,29 @@ with tab_rep:
         st.info("Breakeven-gögn óuppfyllt. Keyra `lanamal.update_breakeven_slot()` "
                 "til að sækja RIKB/RIKS af lanamal.is.")
     else:
-        cc = [r for r in mvb["curve"]]
+        cc = mvb["curve"]; term = mvb["model_term"]
         k1, k2, k3 = st.columns(3)
-        k1.metric("Módel 12-mán. verðbólga", f"{mvb['model_yoy']:.1f}%")
-        k2.metric(f"Markaðsálag (stysta ~{mvb['breakeven_horizon_yrs']:.0f}á)",
+        k1.metric(f"Módel {mvb['model_horizon_yrs']:.0f}-ára meðalverðbólga",
+                  f"{mvb['model_avg']:.2f}%")
+        k2.metric(f"Markaðsálag (~{mvb['breakeven_horizon_yrs']:.0f}á)",
                   f"{mvb['breakeven']:.2f}%")
         k3.metric("Fleygur (álag − módel)", f"{mvb['implied_wedge']:+.2f}pp")
         hs = [r["horizon_yrs"] for r in cc]; be = [r["breakeven_pct"] for r in cc]
-        fig, ax = plt.subplots(figsize=(9, 3.2))
-        ax.plot(hs, be, color=C["green"], lw=2, marker="o", label="markaðs-verðbólguálag (RIKB−RIKS)")
-        ax.axhline(mvb["model_yoy"], color=C["blue"], lw=1.6, ls="--", label="módel 12-mán.")
+        mh = [t["horizon_yrs"] for t in term]; mv = [t["avg_infl"] for t in term]
+        fig, ax = plt.subplots(figsize=(9, 3.4))
+        ax.plot(hs, be, color=C["green"], lw=2, marker="o", label="markaðsálag (RIKB−RIKS)")
+        ax.plot(mh, mv, color=C["blue"], lw=2, marker="D", ms=7, label="módel meðalverðbólga (1/2/3 ár)")
         ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6, label="markmið 2,5%")
-        ax.set_xlabel("sjóndeildarhringur (ár)"); ax.set_ylabel("%")
-        ax.set_title("Verðbólguálag vs módel"); ax.legend(frameon=False, fontsize=8)
+        ax.set_xlabel("sjóndeildarhringur (ár)"); ax.set_ylabel("meðal-ársverðbólga %")
+        ax.set_title("Verðbólga eftir sjóndeildarhring: módel vs markaður")
+        ax.legend(frameon=False, fontsize=8)
         st.pyplot(fig, width="stretch")
-        st.caption("Verðbólguálag = óverðtryggð ávöxtun (RIKB) − verðtryggð (RIKS), "
-                   "lanamal.is. Stysta verðtryggða bréf er ~4 ár, svo álagið ber "
-                   "áhættuálag og skortsálag verðtryggðra bréfa — þar liggur h=3–12 "
-                   "forskot módelsins. / Breakeven carries risk & scarcity premia; "
-                   "the model is a cleaner near-term expectation.")
+        st.caption("Nú samræmdir sjóndeildarhringar: T-ára álag ≈ meðalverðbólga markaðar "
+                   "næstu T ár, borið saman við T-ára meðalverðbólgu módelsins (úr 36-mán. "
+                   "brautinni). Álag umfram módel = áhættu- + skortsálag verðtryggðra bréfa — "
+                   "þar liggur h=3–12 forskotið. / Horizon-matched: a T-year breakeven ≈ the "
+                   "market's average inflation over T years, vs the model's T-year average. "
+                   "Breakeven above the model is the risk + scarcity premium.")
 
     # --- 5) Model vs bank analysts ---------------------------------------
     st.header("5 · Módel vs greiningaraðilar")
