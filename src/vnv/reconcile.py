@@ -46,6 +46,7 @@ def reconcile_path(
     topdown_sd: pd.Series,          # top-down error SD per horizon
     contrib_compounding: float = 0.5,   # bottom-up SD grows ~ h**this
     topdown_short_penalty: float = 3.0, # inflate top-down SD at short horizons
+    penalty_ramp: int = 12,             # months over which the penalty glides to 1
 ) -> tuple[pd.Series, pd.DataFrame, pd.Series]:
     """Reconcile the whole path.
 
@@ -64,12 +65,13 @@ def reconcile_path(
     months = contrib_fc.index
     comps = list(contrib_fc.columns)
     sd1 = contrib_sd1.reindex(comps).fillna(contrib_sd1.median()).to_numpy()
-    H = len(months)
 
     rec_rows, heads, head_sd = [], [], []
     for h, m in enumerate(months, start=1):
         sd_c = sd1 * (h ** contrib_compounding)
-        pen = 1.0 + (topdown_short_penalty - 1.0) * (H - h) / max(H - 1, 1)
+        # top-down penalty glides from ×penalty at h=1 to ×1 by penalty_ramp
+        # months (fixed), then stays 1 — so near-term behaviour is independent of H.
+        pen = 1.0 + (topdown_short_penalty - 1.0) * max(0.0, (penalty_ramp - h) / max(penalty_ramp - 1, 1))
         a0 = 1.0 / (float(topdown_sd.loc[m]) * pen) ** 2
         d = 1.0 / sd_c ** 2
         M = np.diag(d) + a0 * np.ones((len(comps), len(comps)))

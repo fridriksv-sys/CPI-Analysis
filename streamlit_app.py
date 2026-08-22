@@ -39,42 +39,24 @@ def load_all():
     return head, sub_new, panel_old, g
 
 
-@st.cache_data(ttl=3600, show_spinner="Reikna spá ...")
-def run_forecast():
+@st.cache_data(ttl=3600, show_spinner="Reikna vogaferil ...")
+def weight_path():
+    """Price-updated weight path (for the Vogir diagnostics view)."""
     head, sub_new, panel_old, g = load_all()
     last_m = g.index.max()
-    latest = sub_new[sub_new.manudur == last_m].set_index("code")
-    w0 = latest.loc[models.COMPONENTS, "vaegi"]
+    w0 = sub_new[sub_new.manudur == last_m].set_index("code").loc[models.COMPONENTS, "vaegi"]
     fits = {c: models.fit_component(g[c], c) for c in models.COMPONENTS}
     spl = ingest.load_sub_spliced()
     fc = models.forecast_components(fits, last_m, 12, hms_rent_mm=rent.hms_rent_mm(),
                                     sub_spliced=spl, comp_history=g, fx_mm=sedlabanki.fx_mm())
-    cal = nowcast.calibrate_fuel()
-    try:
-        obs = nowcast.fuel_nowcast(last_m + 1, cal)
-    except ValueError:
-        obs = {}
-    fc_obs = nowcast.apply_observables(fc, obs)
-    head_mm, contribs, wpath = models.aggregate_bottom_up(fc_obs, w0)
-    sims = models.bootstrap_paths(fits, fc_obs, w0, n_sims=1000)
-
-    # Phase 6: top-down + MinT reconciliation
-    from vnv import reconcile, topdown
-    mm_hist = head[("CPI", "change_M")].dropna()
-    tf = topdown.fit(mm_hist)
-    td_path = topdown.forecast(tf, 12)
-    td_sd = topdown.error_sd_by_horizon(tf, 12)
-    ctb, _ = reconcile.contributions_from_forecast(fc_obs, w0)
-    csd1 = pd.Series({c: fits[c].resid.std() * float(w0.get(c, 0)) / 100 for c in fc_obs.columns})
-    rec_head, rec_contrib, rec_sd = reconcile.reconcile_path(ctb, td_path, csd1, td_sd)
-    return dict(last_m=last_m, latest=latest, w0=w0, fc=fc_obs, obs=obs, cal=cal,
-                head_mm=head_mm, contribs=contribs, wpath=wpath, sims=sims,
-                td_path=td_path, rec_head=rec_head, rec_sd=rec_sd)
+    _, _, wpath = models.aggregate_bottom_up(fc, w0)
+    return wpath
 
 
 head, sub_new, panel_old, g = load_all()
-R = run_forecast()
-last_m, latest, w0 = R["last_m"], R["latest"], R["w0"]
+last_m = g.index.max()
+latest = sub_new[sub_new.manudur == last_m].set_index("code")
+w0 = latest.loc[models.COMPONENTS, "vaegi"]
 idx_hist = head[("CPI", "index")]
 name_map = latest.loc[models.COMPONENTS, "heiti"].str.slice(0, 40)
 
@@ -82,100 +64,12 @@ st.title("Vísitala neysluverðs — spálíkan")
 st.caption(f"Nýjasta birting: {last_m} · VNV {idx_hist.iloc[-1]:.1f} · "
            f"12M verðbólga {head[('CPI', 'change_A')].iloc[-1]:.1f}%")
 
-tab_now, tab_fc, tab_w, tab_gate, tab_feed, tab_rep = st.tabs(
-    ["Núspá", "12 mánaða spá", "Vogir", "Endurbygging (gátt)", "Gagnalindir", "Skýrsla"])
+tab_rep, tab_diag = st.tabs(["Skýrsla", "Gögn & gæði"])
 
-# ---------------------------------------------------------------- tab: nowcast
-with tab_now:
-    target = last_m + 1
-    # Headline nowcast = the reconciled (forecast-of-record) h=1, identical to the
-    # value in the Skýrsla report. At h=1 the reconciliation preserves the
-    # observable-driven bottom-up; the per-component table below is that bottom-up
-    # decomposition.
-    hm1 = R["rec_head"].iloc[0]
-    c1, c2, c3 = st.columns(3)
-    c1.metric(f"Núspá {target} (m/m)", f"{hm1:+.2f}%")
-    yy_impl = (idx_hist.iloc[-1] * (1 + hm1 / 100) / idx_hist.loc[target - 12] - 1) * 100
-    c2.metric("12M verðbólga við birtingu", f"{yy_impl:.1f}%")
-    if R["obs"]:
-        c3.metric("Eldsneyti (mælt, Gasvaktin)", f"{R['obs']['CP0722']:+.2f}%",
-                  help="Kvarðað dæluverð yfir söfnunarglugga (1.–15.); uppfærist daglega")
-    st.caption("Söfnunargluggi Hagstofunnar er 1.–15. — núspáin batnar fram að því. "
-               "Núspá = reconciled (MinT) h=1; taflan sýnir bottom-up sundurliðun.")
-
-    tbl = pd.DataFrame({
-        "Liður": name_map,
-        "Vægi %": w0.round(2),
-        "m/m spá %": R["fc"].iloc[0].round(2),
-        "Framlag pp": R["contribs"].iloc[0].round(3),
-        "Uppruni": ["mælt" if c in R["obs"] else "líkan" for c in models.COMPONENTS],
-    }).sort_values("Framlag pp", ascending=False)
-    st.dataframe(tbl, height=420, width="stretch")
-
-    st.subheader("Dæluverð í rauntíma (Gasvaktin)")
-    fig, ax = plt.subplots()
-    for f_, col, lab in [("bensin95", C["blue"], "bensín 95"), ("diesel", C["orange"], "dísel")]:
-        s = fuel.national_price(f_)
-        s = s[s.index >= s.index.max() - pd.Timedelta(days=180)]
-        ax.plot(s.index, s, color=col, lw=1.8, label=lab)
-    ax.set_ylabel("kr/l (listaverð, meðaltal söluaðila)")
-    ax.legend(frameon=False)
-    st.pyplot(fig, width="content")
-
-# ---------------------------------------------------------------- tab: forecast
-with tab_fc:
-    path_idx = idx_hist.iloc[-1] * (1 + R["head_mm"] / 100).cumprod()
-    yy = (path_idx / idx_hist.reindex(R["head_mm"].index - 12).to_numpy() - 1) * 100
-    lvl_sims = idx_hist.iloc[-1] * (1 + R["sims"] / 100).cumprod(axis=1)
-    yy_sims = (lvl_sims / idx_hist.reindex(R["sims"].columns - 12).to_numpy() - 1) * 100
-    qs = yy_sims.quantile([0.05, 0.25, 0.5, 0.75, 0.95]).T
-
-    # Phase 6 reconciled path (headline forecast of record) + its y/y band
-    rec_idx = idx_hist.iloc[-1] * (1 + R["rec_head"] / 100).cumprod()
-    rec_yy = (rec_idx / idx_hist.reindex(R["rec_head"].index - 12).to_numpy() - 1) * 100
-    cum_sd = np.sqrt((R["rec_sd"] ** 2).cumsum())
-    td_idx = idx_hist.iloc[-1] * (1 + R["td_path"] / 100).cumprod()
-    td_yy = (td_idx / idx_hist.reindex(R["td_path"].index - 12).to_numpy() - 1) * 100
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Verðbólga eftir 12 mán. (reconciled)", f"{rec_yy.iloc[-1]:.1f}%")
-    m2.metric("bottom-up / top-down", f"{yy.iloc[-1]:.1f}% / {td_yy.iloc[-1]:.1f}%")
-    m3.metric("90% bil (MinT)", f"{(rec_yy.iloc[-1]-1.64*cum_sd.iloc[-1]):.1f}% – "
-              f"{(rec_yy.iloc[-1]+1.64*cum_sd.iloc[-1]):.1f}%")
-
-    hist_yy = head[("CPI", "change_A")]["2022":]
-    x = rec_yy.index.to_timestamp()
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    ax.plot(hist_yy.index.to_timestamp(), hist_yy, color=C["black"], lw=1.8, label="raun")
-    ax.fill_between(x, rec_yy - 1.64 * cum_sd, rec_yy + 1.64 * cum_sd, color=C["sky"], alpha=0.25, lw=0, label="90% bil")
-    ax.fill_between(x, rec_yy - 0.67 * cum_sd, rec_yy + 0.67 * cum_sd, color=C["sky"], alpha=0.45, lw=0, label="50% bil")
-    ax.plot(x, rec_yy, color=C["blue"], lw=2.2, label="reconciled (MinT)")
-    ax.plot(x, yy, color=C["sky"], lw=1.2, ls="--", label="bottom-up")
-    ax.plot(x, td_yy, color=C["orange"], lw=1.2, ls="--", label="top-down")
-    ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6)
-    ax.set_title("Verðbólguspá y/y — reconciled með óvissubili úr MinT")
-    ax.legend(frameon=False, ncols=3)
-    st.pyplot(fig, width="stretch")
-
-    st.subheader("Framlög til 12 mánaða verðbólgu (pp)")
-    last12 = R["contribs"].sum().sort_values()
-    fig2, ax2 = plt.subplots(figsize=(9, 6))
-    ax2.barh(name_map.reindex(last12.index), last12,
-             color=[C["red"] if v < 0 else C["blue"] for v in last12], height=0.6)
-    ax2.axvline(0, color=C["black"], lw=0.8)
-    ax2.grid(axis="y", alpha=0)
-    st.pyplot(fig2, width="stretch")
-
-    st.subheader("Verðtryggingarferill (VNV í mánuði t → verðtrygging í t+2)")
-    vt_tbl = pd.DataFrame({
-        "VNV (spá)": path_idx.round(1),
-        "m/m %": R["head_mm"].round(2),
-        "verðtryggingarmánuður": (R["head_mm"].index + 2).astype(str),
-    })
-    st.dataframe(vt_tbl, width="stretch")
-
-# ---------------------------------------------------------------- tab: weights
-with tab_w:
+# ================================================================ tab: diagnostics
+# ---- Vogir (weights) ----
+with tab_diag:
+    st.header("Vogir")
     st.caption("Vægi = verðuppfærð hlutdeild í körfunni (Vægi %, Hagstofan). "
                "Spáin notar nýjustu birtu vogir og verðuppfærir þær eftir spábraut.")
     d = pd.DataFrame({"heiti": name_map, "vægi": w0}).sort_values("vægi")
@@ -198,11 +92,14 @@ with tab_w:
     st.pyplot(fig2, width="stretch")
 
     st.subheader("Vogaferill spár (verðuppfærður)")
-    st.dataframe(R["wpath"].T.set_axis(name_map.reindex(R["wpath"].columns), axis=0).round(2),
+    _wp = weight_path()
+    st.dataframe(_wp.T.set_axis(name_map.reindex(_wp.columns), axis=0).round(2),
                  width="stretch")
 
-# ---------------------------------------------------------------- tab: gates
-with tab_gate:
+# ---- Endurbygging (reconstruction gate) ----
+with tab_diag:
+    st.divider()
+    st.header("Endurbygging (gátt)")
     st.caption("Harða gáttin úr PLAN.md fasa 2: birt vísitala endurbyggð úr liðum. "
                "Full úttekt í notebooks/02_reconstruction_check.ipynb.")
     r1 = reconstruct.mm_from_panel(panel_old, reconstruct.DIV_OLD).loc["2019":]
@@ -225,8 +122,10 @@ with tab_gate:
     ax.set_ylabel("bp")
     st.pyplot(fig, width="stretch")
 
-# ---------------------------------------------------------------- tab: feeds
-with tab_feed:
+# ---- Gagnalindir (data feeds) ----
+with tab_diag:
+    st.divider()
+    st.header("Gagnalindir")
     fuel_last = fuel.national_price("bensin95").dropna()
     n_snap = len(groceries.load_snapshots())
     n_quotes = len(airfares.load_quotes())
@@ -261,8 +160,18 @@ with tab_feed:
     st.dataframe(pd.DataFrame(rows, columns=["Lind", "Staða", "Athugasemd"]),
                  width="stretch", hide_index=True)
 
+    st.subheader("Dæluverð í rauntíma (Gasvaktin)")
+    fig, ax = plt.subplots(figsize=(9, 3.4))
+    for f_, col, lab in [("bensin95", C["blue"], "bensín 95"), ("diesel", C["orange"], "dísel")]:
+        s = fuel.national_price(f_)
+        s = s[s.index >= s.index.max() - pd.Timedelta(days=180)]
+        ax.plot(s.index, s, color=col, lw=1.8, label=lab)
+    ax.set_ylabel("kr/l (listaverð, meðaltal söluaðila)")
+    ax.legend(frameon=False)
+    st.pyplot(fig, width="content")
+
     st.subheader("Kvörðun eldsneytis (2016–2025)")
-    cal = R["cal"]
+    cal = nowcast.calibrate_fuel()
     st.write(f"`published = {cal.alpha:+.3f} + {cal.beta:.3f} × scraped` · "
              f"n={cal.n_obs} · residual SD {cal.resid_sd:.2f}pp "
              f"(~{cal.resid_sd * 0.035:.3f}pp á heildarvísitölu)")
@@ -279,7 +188,7 @@ with tab_feed:
     ax.set_ylabel("published IS0722 m/m %")
     st.pyplot(fig, width="content")
 
-# ---------------------------------------------------------------- tab: report
+# ================================================================ tab: report (main)
 with tab_rep:
     from vnv import report as _report
 
@@ -306,12 +215,13 @@ with tab_rep:
     st.caption("Núspá = reconciled (MinT) h=1. Söfnunargluggi Hagstofunnar er 1.–15.; "
                "eldsneyti er þegar mælt, önnur mæld gögn bætast við fram að birtingu.")
 
-    # --- 2) Next 12 months trend ------------------------------------------
-    st.header("2 · Næstu 12 mánuðir — leitni")
+    # --- 2) Trend over the forecast horizon (36 months) -------------------
+    st.header("2 · Leitni — næstu 3 ár")
     lo, hi = rep["band90"]
-    m1, m2 = st.columns(2)
+    m1, m2, m3 = st.columns(3)
     m1.metric("Verðbólga eftir 12 mánuði", f"{rep['yy_12m']:.1f}%")
-    m2.metric("90% óvissubil (MinT)", f"{lo:.1f}% – {hi:.1f}%")
+    m2.metric("90% óvissubil (12m, MinT)", f"{lo:.1f}% – {hi:.1f}%")
+    m3.metric(f"Eftir 36 mán. ({rep['yy_path'].index[-1]})", f"{rep['yy_path'].iloc[-1]:.1f}%")
     yy_path = rep["yy_path"]; cum_sd = np.sqrt((rep["rec_sd"] ** 2).cumsum())
     hist_yy = head[("CPI", "change_A")]["2022":]
     x = yy_path.index.to_timestamp()
@@ -321,8 +231,16 @@ with tab_rep:
     ax.fill_between(x, yy_path - 0.67 * cum_sd, yy_path + 0.67 * cum_sd, color=C["sky"], alpha=0.45, lw=0, label="50% bil")
     ax.plot(x, yy_path, color=C["blue"], lw=2.2, label="spá (reconciled)")
     ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6)
-    ax.set_title("Verðbólguspá y/y (%)"); ax.legend(frameon=False, ncols=4)
+    ax.set_title("Verðbólguspá y/y (%) — 36 mánaða braut")
+    ax.legend(frameon=False, ncols=4)
     st.pyplot(fig, width="stretch")
+    st.caption("Fyrstu ~12 mánuðir bera botn-upp smáatriði (húsaleiga, gengi, eldsneyti); "
+               "eftir það ræður top-down akkerið (glóðar að 2,5% markmiði) og óvissan breikkar. "
+               "/ Bottom-up detail drives the first ~12m; beyond that the top-down anchor "
+               "(glide to the 2.5% target) governs and the bands widen.")
+
+    with st.expander("Verðtryggingarferill (VNV í mánuði t → verðtrygging í t+2)"):
+        st.dataframe(rep["verdtrygging"].reset_index(), width="stretch", hide_index=True)
 
     # --- 3) Each underlying: trend + how it was derived -------------------
     st.header("3 · Undirliðir — leitni og aðferð")

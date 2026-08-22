@@ -113,7 +113,7 @@ def _component_levels() -> pd.DataFrame:
     return lvl.sort_index()
 
 
-def build_report() -> dict:
+def build_report(horizons: int = 36) -> dict:
     head = ingest.load_headline()
     spl = ingest.load_sub_spliced(); new = ingest.load_sub_new(); old = ingest.load_panel_old()
     g = models.build_component_history(spl, old, new)
@@ -121,8 +121,9 @@ def build_report() -> dict:
     idx_hist = head[("CPI", "index")]
     w0 = new[(new.manudur == last_m) & new.code.isin(models.COMPONENTS)].set_index("code").vaegi
 
+    H = horizons  # forecast horizon (default 36 months; headline stays at 12m)
     fits = {c: models.fit_component(g[c], c) for c in models.COMPONENTS}
-    fc = models.forecast_components(fits, last_m, 12, hms_rent_mm=rent.hms_rent_mm(),
+    fc = models.forecast_components(fits, last_m, H, hms_rent_mm=rent.hms_rent_mm(),
                                     sub_spliced=spl, comp_history=g, fx_mm=sedlabanki.fx_mm())
     cal = nowcast.calibrate_fuel()
     try:
@@ -134,35 +135,41 @@ def build_report() -> dict:
     _, contribs, _ = models.aggregate_bottom_up(fc, w0)
     ctb, _ = reconcile.contributions_from_forecast(fc, w0)
     tf = topdown.fit(head[("CPI", "change_M")].dropna())
-    td = topdown.forecast(tf, 12)
+    td = topdown.forecast(tf, H)
     csd1 = pd.Series({c: fits[c].resid.std() * float(w0.get(c, 0)) / 100 for c in fc.columns})
-    rec_head, _, rec_sd = reconcile.reconcile_path(ctb, td, csd1, topdown.error_sd_by_horizon(tf, 12))
+    rec_head, _, rec_sd = reconcile.reconcile_path(ctb, td, csd1, topdown.error_sd_by_horizon(tf, H))
 
-    # headline nowcast (h=1) and 12-month path
+    # headline nowcast (h=1) and the full path; the headline y/y is at 12 months
     nowcast_mm = rec_head.iloc[0]
     path_idx = idx_hist.iloc[-1] * (1 + rec_head / 100).cumprod()
-    yy_12m = (path_idx.iloc[-1] / idx_hist[path_idx.index[-1] - 12] - 1) * 100
-    cum_sd = float(np.sqrt((rec_sd ** 2).cumsum()).iloc[-1])
+    m12 = path_idx.index[min(11, len(path_idx) - 1)]  # 12 months out
+    yy_12m = (path_idx[m12] / idx_hist[m12 - 12] - 1) * 100
+    cum_sd = float(np.sqrt((rec_sd ** 2).cumsum()).iloc[min(11, len(rec_sd) - 1)])  # 12m band
 
-    # contribution waterfall by block (12-month sum)
-    blk = contribs.sum().groupby(_block_of).sum().sort_values(ascending=False)
+    # contribution waterfall by block (first 12 months, the informative window)
+    blk = contribs.iloc[:12].sum().groupby(_block_of).sum().sort_values(ascending=False)
     waterfall = pd.DataFrame({
         "block": [BLOCK_LABELS.get(b, (b, b))[0] for b in blk.index],
         "block_en": [BLOCK_LABELS.get(b, (b, b))[1] for b in blk.index],
         "framlag_pp": blk.values.round(3),
     })
 
-    # verðtrygging path (t -> t+2)
-    vt = pd.DataFrame({"VNV_spa": path_idx.round(1)})
-    vt.index = path_idx.index + 2
+    # verðtrygging path (t -> t+2), near-term window (the fund-relevant part)
+    vt = pd.DataFrame({"VNV_spa": path_idx.iloc[:12].round(1)})
+    vt.index = path_idx.index[:12] + 2
     vt.index.name = "verdtryggingarmanudur"
 
     # model vs breakeven (if slot populated)
     mvb = benchmarks.model_vs_breakeven(yy_12m)
     # model vs bank analysts (if slot populated)
     analysts = benchmarks.analyst_comparison(head, nowcast_mm, last_m + 1)
+    # y/y over the whole path: for months >12 ahead the base is the forecast
+    # path itself, so build a combined historical+forecast index.
+    full_idx = pd.concat([idx_hist, path_idx])
+    full_idx = full_idx[~full_idx.index.duplicated(keep="last")].sort_index()
+    yy_path = (path_idx / full_idx.reindex(path_idx.index - 12).to_numpy() - 1) * 100
+
     # model vs Seðlabanki Peningamál (quarterly y/y forecast)
-    yy_path = (path_idx / idx_hist.reindex(path_idx.index - 12).to_numpy() - 1) * 100
     peningamal = benchmarks.peningamal_comparison(yy_path)
 
     # per-component detail: history + forecast index trend, method, contribution
@@ -171,8 +178,7 @@ def build_report() -> dict:
     return dict(last_m=last_m, nowcast_month=last_m + 1, nowcast_mm=nowcast_mm,
                 analysts=analysts, peningamal=peningamal,
                 yy_12m=yy_12m, band90=(yy_12m - 1.64 * cum_sd, yy_12m + 1.64 * cum_sd),
-                yy_path=(path_idx / idx_hist.reindex(path_idx.index - 12).to_numpy() - 1) * 100,
-                path_idx=path_idx, rec_sd=rec_sd,
+                yy_path=yy_path, path_idx=path_idx, rec_sd=rec_sd,
                 waterfall=waterfall, verdtrygging=vt, model_vs_breakeven=mvb,
                 path_mm=rec_head, fc=fc, contribs=contribs, details=details)
 
@@ -188,7 +194,7 @@ def component_details(fc: pd.DataFrame, contribs: pd.DataFrame, w0: pd.Series,
     levels = _component_levels()
     new = ingest.load_sub_new()
     heiti = new[new.manudur == last_m].set_index("code")["heiti"]
-    contrib12 = contribs.sum()
+    contrib12 = contribs.iloc[:12].sum()  # 12-month contribution even if path is longer
 
     out = []
     for c in models.COMPONENTS:

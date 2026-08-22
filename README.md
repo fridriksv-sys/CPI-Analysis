@@ -32,11 +32,14 @@ Notebooks are committed **with outputs** so they read like a report. To re-run:
 .venv\Scripts\python -m streamlit run streamlit_app.py
 ```
 
-Five tabs: **Núspá** (current-month nowcast with observed-vs-model source per
-component, live pump prices), **12 mánaða spá** (fan chart, contributions,
-verðtrygging path), **Vogir** (the weights), **Endurbygging** (live gate
-status), **Gagnalindir** (feed status + fuel calibration). Same `src/vnv` code
-as the notebooks; Hagstofa data cached 1 hour.
+Two tabs. **Skýrsla** (the report, main) reads top to bottom: (1) next month's
+CPI, (2) the 36-month trend with MinT band, (3) each underlying with its trend
+chart + method, (4) model vs breakeven, (5) model vs bank analysts, (6) model vs
+Seðlabanki Peningamál. **Gögn & gæði** holds the diagnostics: weights, the Phase-2
+reconstruction gate, and data-feed status + fuel calibration. The forecast path
+runs 36 months (the 12-month figure stays the headline; beyond ~12m the top-down
+anchor governs and bands widen). Same `src/vnv` code as the notebooks; Hagstofa
+data cached 1 hour, market breakeven refreshed on load.
 
 Data is cached in `data/raw/` (git-ignored); delete the cache to force fresh
 API fetches. `scripts/build_notebooks.py` regenerates and re-executes all
