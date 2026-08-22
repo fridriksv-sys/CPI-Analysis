@@ -159,11 +159,14 @@ def build_report() -> dict:
 
     # model vs breakeven (if slot populated)
     mvb = benchmarks.model_vs_breakeven(yy_12m)
+    # model vs bank analysts (if slot populated)
+    analysts = benchmarks.analyst_comparison(head, nowcast_mm, last_m + 1)
 
     # per-component detail: history + forecast index trend, method, contribution
     details = component_details(fc, contribs, w0, last_m)
 
     return dict(last_m=last_m, nowcast_month=last_m + 1, nowcast_mm=nowcast_mm,
+                analysts=analysts,
                 yy_12m=yy_12m, band90=(yy_12m - 1.64 * cum_sd, yy_12m + 1.64 * cum_sd),
                 yy_path=(path_idx / idx_hist.reindex(path_idx.index - 12).to_numpy() - 1) * 100,
                 path_idx=path_idx, rec_sd=rec_sd,
@@ -242,4 +245,23 @@ def to_markdown(rep: dict) -> str:
         lines.append("|---|---|")
         for r in mvb["curve"]:
             lines.append(f"| {r['horizon_yrs']:.0f} | {r['breakeven_pct']:.2f} |")
+
+    an = rep.get("analysts")
+    lines += ["", "## Módel vs greiningaraðilar / Model vs bank analysts", ""]
+    if not an:
+        lines.append("_Engar greiningarspár skráðar — sjá data/benchmarks/analyst_forecasts.csv._")
+    else:
+        cur = an["current"]
+        if cur:
+            lines.append(f"**Næsti print {cur['month']} (m/m):**  ")
+            lines.append(f"- Módel / model: {cur['model']:+.2f}%  ")
+            for a in cur["analysts"]:
+                lines.append(f"- {a['source']}: {a['mm_pct']:+.2f}% (y/y {a['yoy_pct']:.1f}%)  ")
+            lines.append(f"- Samhljóða / consensus: {cur['consensus_mm']:+.2f}%  "
+                         f"→ módel − consensus: {cur['model_minus_consensus']:+.2f}pp")
+        if an["track"] is not None and len(an["track"]):
+            lines += ["", "Ferilskrá / track record (m/m villa vs raun):", "",
+                      "| Aðili / Source | n | RMSE | Bias |", "|---|---|---|---|"]
+            for r in an["track"].itertuples():
+                lines.append(f"| {r.source} | {int(r.n)} | {r.RMSE:.3f} | {r.bias:+.3f} |")
     return "\n".join(lines)

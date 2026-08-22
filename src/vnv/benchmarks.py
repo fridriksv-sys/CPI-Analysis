@@ -14,6 +14,7 @@ missing files return empty frames.
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from .px_client import REPO_ROOT
@@ -38,11 +39,57 @@ def load_breakeven() -> pd.DataFrame:
 
 def load_analyst_forecasts() -> pd.DataFrame:
     """Bank-analyst + Seðlabanki forecasts, tidy. Populate
-    data/benchmarks/analyst_forecasts.csv. Empty until then."""
+    data/benchmarks/analyst_forecasts.csv (one row per source per target month).
+    Empty until then. Real published figures only — never synthesize."""
     f = DATA / "analyst_forecasts.csv"
     if not f.exists():
         return pd.DataFrame(columns=ANALYST_COLS)
-    return pd.read_csv(f, parse_dates=["forecast_date"])
+    df = pd.read_csv(f, parse_dates=["forecast_date"])
+    df["manudur"] = pd.PeriodIndex(df.target_month.astype(str), freq="M")
+    return df
+
+
+def analyst_comparison(head, model_nowcast: float, nowcast_month) -> dict | None:
+    """Model vs analysts vs consensus for the upcoming print, plus the realized
+    track record (each source's m/m error vs the published actual).
+
+    head: VIS01000 frame (for the published actual m/m). Returns None if no
+    analyst rows exist.
+    """
+    fc = load_analyst_forecasts()
+    if fc.empty:
+        return None
+    actual_mm = head[("CPI", "change_M")]
+
+    # --- upcoming print: model vs each analyst vs consensus ---
+    up = fc[fc.manudur == nowcast_month]
+    current = None
+    if not up.empty:
+        rows = [{"source": r.source, "mm_pct": r.mm_pct, "yoy_pct": r.yoy_pct}
+                for r in up.itertuples()]
+        cons = float(up.mm_pct.mean())
+        current = {"month": nowcast_month, "model": model_nowcast,
+                   "analysts": rows, "consensus_mm": cons,
+                   "model_minus_consensus": model_nowcast - cons}
+
+    # --- realized track record: analyst m/m error vs published actual ---
+    real = fc[fc.manudur.isin(actual_mm.index)].copy()
+    real["actual"] = real.manudur.map(actual_mm)
+    real = real.dropna(subset=["actual"])
+    track = None
+    if not real.empty:
+        real["error"] = real.mm_pct - real.actual
+        track = (real.groupby("source")
+                 .apply(lambda d: pd.Series({
+                     "n": len(d),
+                     "RMSE": float(np.sqrt((d.error ** 2).mean())),
+                     "MAE": float(d.error.abs().mean()),
+                     "bias": float(d.error.mean())}), include_groups=False)
+                 .reset_index())
+        detail = real[["manudur", "source", "mm_pct", "actual", "error"]].sort_values("manudur")
+    else:
+        detail = None
+    return {"current": current, "track": track, "detail": detail}
 
 
 def model_vs_breakeven(model_yoy_12m: float, horizon_yrs: float = 1.0):

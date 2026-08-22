@@ -142,7 +142,17 @@ shortest breakeven is ~4y — its gap to the model's near-term call is an indica
 premium/expectations wedge (breakevens carry inflation-risk and indexed-bond
 scarcity premia, which is where the h=3–12 edge lives).
 
-**All seven plan phases are implemented and live end to end.** The only optional
-slot left is manual entry of bank-analyst / Peningamál forecasts
-(`data/benchmarks/analyst_forecasts.csv`); the airfare and grocery observable
-feeds keep maturing to sharpen h=1.
+## Analyst benchmark
+
+Bank-analyst forecasts (Íslandsbanki Greining, Landsbankinn) are compared against
+the model and realized actuals — real published figures in
+`data/benchmarks/analyst_forecasts.csv` (one row per source per print, added each
+month from the banks' forecast notes ~1 week before release). The report's
+"Módel vs greiningaraðilar" section and dashboard Section 5 show the upcoming-print
+model-vs-consensus gap and each source's realized track record. As the plan
+predicts, analysts are hard to beat at h=1 (they run the same public scrapes) — the
+edge is at h=3–12; the track record confirms it (Landsbankinn h=1 RMSE ~0.09pp).
+
+**All seven plan phases are implemented and live end to end.** The airfare and
+grocery observable feeds keep maturing to sharpen h=1; the analyst slot grows one
+row per source per month.

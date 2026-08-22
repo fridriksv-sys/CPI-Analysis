@@ -1421,10 +1421,25 @@ ax.legend(frameon=False)
 plt.show()
 '''),
 ("md", """\
-**Bank analysts** (Íslandsbanki Greining, Landsbankinn, Arion) and **Seðlabanki
-Peningamál** are published in notes/PDFs; they load from a committed CSV slot
-(`data/benchmarks/analyst_forecasts.csv`) and the comparison is ready once entered.
+## Model vs bank analysts
+
+Bank analysts (Íslandsbanki Greining, Landsbankinn) publish an m/m CPI forecast
+~1 week before each print, from a committed slot (`data/benchmarks/analyst_forecasts.csv`,
+real published figures). The plan is explicit: the model will *not* reliably beat
+consensus at h=1 — analysts run the same public scrapes (fuel, HMS, útsölur) — and
+the edge is at h=3–12. The track record bears this out.
 """),
+("code", '''\
+an = benchmarks.analyst_comparison(head, model_nowcast=rep["nowcast_mm"], nowcast_month=rep["last_m"] + 1)
+cur = an["current"]
+print(f"upcoming print {cur['month']}:  model {cur['model']:+.2f}%   "
+      f"consensus {cur['consensus_mm']:+.2f}%   (model − consensus {cur['model_minus_consensus']:+.2f}pp)")
+for a in cur["analysts"]:
+    print(f"    {a['source']:14s} {a['mm_pct']:+.2f}%  (y/y {a['yoy_pct']:.1f}%)")
+print("\\ntrack record (m/m error vs realized):")
+display(an["track"])
+display(an["detail"].assign(manudur=lambda d: d.manudur.astype(str)))
+'''),
 ("md", "## The monthly one-pager"),
 ("code", '''\
 from IPython.display import Markdown

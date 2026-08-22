@@ -230,6 +230,8 @@ with tab_feed:
     fuel_last = fuel.national_price("bensin95").dropna()
     n_snap = len(groceries.load_snapshots())
     n_quotes = len(airfares.load_quotes())
+    from vnv import benchmarks as _bm
+    n_analyst = len(_bm.load_analyst_forecasts())
     rows = [
         ("Hagstofan PxWeb", "✅ virk", f"nýjast: {last_m}"),
         ("Eldsneyti — Gasvaktin", "✅ virk",
@@ -243,6 +245,8 @@ with tab_feed:
         ("Heimsmatvöruverð — FAO", "✅ virk", "prófað fyrir CP01 — of veikt, sleppt"),
         ("Verðbólguálag (RIKB/RIKS) — lanamal.is", "✅ virk",
          "LoadChartData API; keyra lanamal.update_breakeven_slot() til uppfærslu"),
+        ("Greiningaraðilar (Íslandsbanki/Landsbankinn)", "🟡 handvirkt",
+         f"{n_analyst} spár skráðar; bæta við hvern mánuð í analyst_forecasts.csv"),
         ("Matvörur — Krónan (kronan_price_history í Supabase)", "🟡 söfnun hafin",
          f"{n_snap} raðir í staðbundnu afriti — keyra scripts/export_kronan_history.py; "
          "kvörðun þegar saga spannar ≥2 söfnunarglugga"),
@@ -376,6 +380,38 @@ with tab_rep:
                    "áhættuálag og skortsálag verðtryggðra bréfa — þar liggur h=3–12 "
                    "forskot módelsins. / Breakeven carries risk & scarcity premia; "
                    "the model is a cleaner near-term expectation.")
+
+    # --- 5) Model vs bank analysts ---------------------------------------
+    st.header("5 · Módel vs greiningaraðilar")
+    an = rep.get("analysts")
+    if not an:
+        st.info("Engar greiningarspár skráðar. Bæta við í data/benchmarks/analyst_forecasts.csv "
+                "(bankaspár birtast ~viku fyrir hvern print).")
+    else:
+        cur = an["current"]
+        if cur:
+            st.markdown(f"**Næsti print {cur['month']} — spár (m/m):**")
+            cols = st.columns(len(cur["analysts"]) + 2)
+            cols[0].metric("Módel", f"{cur['model']:+.2f}%")
+            for i, a in enumerate(cur["analysts"], start=1):
+                cols[i].metric(a["source"], f"{a['mm_pct']:+.2f}%", help=f"y/y {a['yoy_pct']:.1f}%")
+            cols[-1].metric("Samhljóða", f"{cur['consensus_mm']:+.2f}%",
+                            f"{cur['model_minus_consensus']:+.2f}pp vs módel")
+            st.caption("Bankagreiningar keyra sömu opinberu gögn og módelið (eldsneyti, HMS, "
+                       "útsölur), svo þær eru erfiðar að slá við h=1 — forskot módelsins er á "
+                       "h=3–12. / Analysts run the same public data, so they are hard to beat "
+                       "at h=1; the model's edge is at h=3–12.")
+        if an["track"] is not None and len(an["track"]):
+            st.markdown("**Ferilskrá / track record** (m/m villa vs raun, skráðir mánuðir):")
+            tr = an["track"].copy()
+            tr.columns = ["Aðili", "n", "RMSE", "MAE", "Bias"]
+            st.dataframe(tr.round(3), width="stretch", hide_index=True)
+            if an["detail"] is not None:
+                det = an["detail"].copy(); det["manudur"] = det.manudur.astype(str)
+                det.columns = ["Mánuður", "Aðili", "Spá m/m", "Raun m/m", "Villa"]
+                st.dataframe(det.round(3), width="stretch", hide_index=True)
+            st.caption("Fáir mánuðir skráðir enn — ferilskráin styrkist eftir því sem spár "
+                       "bætast við hvern mánuð.")
 
     st.divider()
     st.download_button("Sækja samantekt (markdown)", _report.to_markdown(rep),
