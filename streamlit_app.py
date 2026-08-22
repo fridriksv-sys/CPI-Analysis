@@ -88,7 +88,11 @@ tab_now, tab_fc, tab_w, tab_gate, tab_feed, tab_rep = st.tabs(
 # ---------------------------------------------------------------- tab: nowcast
 with tab_now:
     target = last_m + 1
-    hm1 = R["head_mm"].iloc[0]
+    # Headline nowcast = the reconciled (forecast-of-record) h=1, identical to the
+    # value in the Skýrsla report. At h=1 the reconciliation preserves the
+    # observable-driven bottom-up; the per-component table below is that bottom-up
+    # decomposition.
+    hm1 = R["rec_head"].iloc[0]
     c1, c2, c3 = st.columns(3)
     c1.metric(f"Núspá {target} (m/m)", f"{hm1:+.2f}%")
     yy_impl = (idx_hist.iloc[-1] * (1 + hm1 / 100) / idx_hist.loc[target - 12] - 1) * 100
@@ -96,7 +100,8 @@ with tab_now:
     if R["obs"]:
         c3.metric("Eldsneyti (mælt, Gasvaktin)", f"{R['obs']['CP0722']:+.2f}%",
                   help="Kvarðað dæluverð yfir söfnunarglugga (1.–15.); uppfærist daglega")
-    st.caption("Söfnunargluggi Hagstofunnar er 1.–15. — núspáin batnar fram að því.")
+    st.caption("Söfnunargluggi Hagstofunnar er 1.–15. — núspáin batnar fram að því. "
+               "Núspá = reconciled (MinT) h=1; taflan sýnir bottom-up sundurliðun.")
 
     tbl = pd.DataFrame({
         "Liður": name_map,

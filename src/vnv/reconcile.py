@@ -45,6 +45,7 @@ def reconcile_path(
     contrib_sd1: pd.Series,         # h=1 error SD per component contribution
     topdown_sd: pd.Series,          # top-down error SD per horizon
     contrib_compounding: float = 0.5,   # bottom-up SD grows ~ h**this
+    topdown_short_penalty: float = 3.0, # inflate top-down SD at short horizons
 ) -> tuple[pd.Series, pd.DataFrame, pd.Series]:
     """Reconcile the whole path.
 
@@ -52,15 +53,24 @@ def reconcile_path(
     headline error SD per horizon). The SD comes from the MinT reconciled
     covariance (SᵀW⁻¹S)⁻¹ — the aggregate variance is 1ᵀ(SᵀW⁻¹S)⁻¹1 — so the
     fan chart reflects the reconciliation, not a naive sum of component errors.
+
+    `topdown_short_penalty` encodes that the top-down CANNOT see this month's
+    idiosyncratic shocks (útsölur, fuel, one-off admin steps): its effective error
+    is inflated at short horizons (×penalty at h=1, gliding to ×1 at the last
+    horizon), so the detailed, observable-driven bottom-up is preserved at h=1 and
+    the top-down only takes over as bottom-up errors compound — the intended
+    behaviour (PLAN_1.md §6), and it keeps the h=1 nowcast equal to the bottom-up.
     """
     months = contrib_fc.index
     comps = list(contrib_fc.columns)
     sd1 = contrib_sd1.reindex(comps).fillna(contrib_sd1.median()).to_numpy()
+    H = len(months)
 
     rec_rows, heads, head_sd = [], [], []
     for h, m in enumerate(months, start=1):
         sd_c = sd1 * (h ** contrib_compounding)
-        a0 = 1.0 / float(topdown_sd.loc[m]) ** 2
+        pen = 1.0 + (topdown_short_penalty - 1.0) * (H - h) / max(H - 1, 1)
+        a0 = 1.0 / (float(topdown_sd.loc[m]) * pen) ** 2
         d = 1.0 / sd_c ** 2
         M = np.diag(d) + a0 * np.ones((len(comps), len(comps)))
         rhs = a0 * float(topdown_mm.loc[m]) * np.ones(len(comps)) + d * contrib_fc.loc[m].to_numpy()
