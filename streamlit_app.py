@@ -57,8 +57,19 @@ def run_forecast():
     fc_obs = nowcast.apply_observables(fc, obs)
     head_mm, contribs, wpath = models.aggregate_bottom_up(fc_obs, w0)
     sims = models.bootstrap_paths(fits, fc_obs, w0, n_sims=1000)
+
+    # Phase 6: top-down + MinT reconciliation
+    from vnv import reconcile, topdown
+    mm_hist = head[("CPI", "change_M")].dropna()
+    tf = topdown.fit(mm_hist)
+    td_path = topdown.forecast(tf, 12)
+    td_sd = topdown.error_sd_by_horizon(tf, 12)
+    ctb, _ = reconcile.contributions_from_forecast(fc_obs, w0)
+    csd1 = pd.Series({c: fits[c].resid.std() * float(w0.get(c, 0)) / 100 for c in fc_obs.columns})
+    rec_head, rec_contrib, rec_sd = reconcile.reconcile_path(ctb, td_path, csd1, td_sd)
     return dict(last_m=last_m, latest=latest, w0=w0, fc=fc_obs, obs=obs, cal=cal,
-                head_mm=head_mm, contribs=contribs, wpath=wpath, sims=sims)
+                head_mm=head_mm, contribs=contribs, wpath=wpath, sims=sims,
+                td_path=td_path, rec_head=rec_head, rec_sd=rec_sd)
 
 
 head, sub_new, panel_old, g = load_all()
@@ -114,20 +125,31 @@ with tab_fc:
     yy_sims = (lvl_sims / idx_hist.reindex(R["sims"].columns - 12).to_numpy() - 1) * 100
     qs = yy_sims.quantile([0.05, 0.25, 0.5, 0.75, 0.95]).T
 
-    m1, m2 = st.columns(2)
-    m1.metric("Verðbólga eftir 12 mánuði (spá)", f"{yy.iloc[-1]:.1f}%")
-    m2.metric("90% bil", f"{qs[0.05].iloc[-1]:.1f}% – {qs[0.95].iloc[-1]:.1f}%")
+    # Phase 6 reconciled path (headline forecast of record) + its y/y band
+    rec_idx = idx_hist.iloc[-1] * (1 + R["rec_head"] / 100).cumprod()
+    rec_yy = (rec_idx / idx_hist.reindex(R["rec_head"].index - 12).to_numpy() - 1) * 100
+    cum_sd = np.sqrt((R["rec_sd"] ** 2).cumsum())
+    td_idx = idx_hist.iloc[-1] * (1 + R["td_path"] / 100).cumprod()
+    td_yy = (td_idx / idx_hist.reindex(R["td_path"].index - 12).to_numpy() - 1) * 100
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Verðbólga eftir 12 mán. (reconciled)", f"{rec_yy.iloc[-1]:.1f}%")
+    m2.metric("bottom-up / top-down", f"{yy.iloc[-1]:.1f}% / {td_yy.iloc[-1]:.1f}%")
+    m3.metric("90% bil (MinT)", f"{(rec_yy.iloc[-1]-1.64*cum_sd.iloc[-1]):.1f}% – "
+              f"{(rec_yy.iloc[-1]+1.64*cum_sd.iloc[-1]):.1f}%")
 
     hist_yy = head[("CPI", "change_A")]["2022":]
+    x = rec_yy.index.to_timestamp()
     fig, ax = plt.subplots(figsize=(10, 4.5))
     ax.plot(hist_yy.index.to_timestamp(), hist_yy, color=C["black"], lw=1.8, label="raun")
-    x = qs.index.to_timestamp()
-    ax.fill_between(x, qs[0.05], qs[0.95], color=C["sky"], alpha=0.25, lw=0, label="90% bil")
-    ax.fill_between(x, qs[0.25], qs[0.75], color=C["sky"], alpha=0.45, lw=0, label="50% bil")
-    ax.plot(x, qs[0.5], color=C["blue"], lw=2, label="spá")
+    ax.fill_between(x, rec_yy - 1.64 * cum_sd, rec_yy + 1.64 * cum_sd, color=C["sky"], alpha=0.25, lw=0, label="90% bil")
+    ax.fill_between(x, rec_yy - 0.67 * cum_sd, rec_yy + 0.67 * cum_sd, color=C["sky"], alpha=0.45, lw=0, label="50% bil")
+    ax.plot(x, rec_yy, color=C["blue"], lw=2.2, label="reconciled (MinT)")
+    ax.plot(x, yy, color=C["sky"], lw=1.2, ls="--", label="bottom-up")
+    ax.plot(x, td_yy, color=C["orange"], lw=1.2, ls="--", label="top-down")
     ax.axhline(2.5, color=C["black"], lw=1, ls=":", alpha=0.6)
-    ax.set_title("Verðbólguspá y/y með óvissubili")
-    ax.legend(frameon=False, ncols=4)
+    ax.set_title("Verðbólguspá y/y — reconciled með óvissubili úr MinT")
+    ax.legend(frameon=False, ncols=3)
     st.pyplot(fig, width="stretch")
 
     st.subheader("Framlög til 12 mánaða verðbólgu (pp)")

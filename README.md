@@ -17,6 +17,7 @@ forecast layer is the v0 baseline of Phase 5.
 | `notebooks/04_nowcast.ipynb` | Phase 3 observables: Gasvaktin fuel calibration (2016–, R²≈0.84) feeding CP0722; the January-2026 lesson (fuel observed correctly, km-charge missed → fiscal calendar); status of pending grocery/airfare feeds |
 | `notebooks/05_imputed_rent.ipynb` | Phase 4: HMS new-contract rents → Hagstofa stock-based CP042 as a distributed lag; post-break EWMA + HMS tilt beats RW and AR(1) OOS; regime-break diagnostic; 12-month rent path |
 | `notebooks/06_driver_blocks.ipynb` | Phase 5: FX pass-through into food/imported goods (lands in the plan's 0.2–0.4 range), validated OOS as a shrunk tilt; wage calendar for kjarasamningar steps; full h=1 stack |
+| `notebooks/07_reconciliation.ipynb` | Phase 6: top-down headline model + MinT reconciliation of bottom-up and top-down; exact aggregation identity; fan chart from the reconciled covariance; honest h=12 y/y (Atkeson–Ohanian) |
 
 Notebooks are committed **with outputs** so they read like a report. To re-run:
 
@@ -106,7 +107,17 @@ rent + FX) improves the ex-January headline RMSE 0.353 → 0.320; the ≤0.15pp 
 is airfare-gated (airfares still collecting) and needs the fiscal calendar applied
 for January — exactly as the plan anticipates.
 
-## Not yet built (Phases 6–7)
+## Phase 6 status — done
 
-BVAR top-down + MinT reconciliation for the 12-month path; analyst / Seðlabanki /
-breakeven benchmark table.
+Top-down headline model (`vnv/topdown.py`: seasonal + AR + trend gliding to the
+2.5% target; `anchor_yoy` exposed for breakeven blending) and MinT reconciliation
+(`vnv/reconcile.py`) in contribution space, so the aggregation identity holds
+exactly and the fan chart comes from the reconciled covariance. The reconciliation
+pulls bottom-up → top-down at longer horizons, as designed. h=12 y/y beats
+RW-on-y/y ex-surge but not full-sample (Atkeson–Ohanian; reported honestly, not
+tuned). Integrated into the dashboard "12 mánaða spá" tab.
+
+## Not yet built (Phase 7)
+
+Benchmark table: bank analysts, Seðlabanki Peningamál, and breakeven inflation
+(RIKS vs RIKB) — the last needs the market feed (LSEG connector, or Keldan/Kodiak).
