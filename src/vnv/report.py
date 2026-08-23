@@ -186,6 +186,7 @@ def build_report(horizons: int = 36) -> dict:
     details = component_details(fc, contribs, w0, last_m)
 
     return dict(last_m=last_m, nowcast_month=last_m + 1, nowcast_mm=nowcast_mm,
+                generated=pd.Timestamp.today().normalize(),
                 analysts=analysts, peningamal=peningamal,
                 yy_12m=yy_12m, band90=(yy_12m - 1.64 * cum_sd, yy_12m + 1.64 * cum_sd),
                 yy_path=yy_path, path_idx=path_idx, rec_sd=rec_sd,
@@ -226,8 +227,12 @@ def component_details(fc: pd.DataFrame, contribs: pd.DataFrame, w0: pd.Series,
 
 def to_markdown(rep: dict) -> str:
     lo, hi = rep["band90"]
+    gen = rep.get("generated")
     lines = [
         f"# VNV spá / CPI forecast — {rep['last_m']}",
+        "",
+        f"_Spá gerð / forecast made: {pd.Timestamp(gen):%Y-%m-%d} · "
+        f"byggt á gögnum til / using data through: {rep['last_m']}_" if gen is not None else "",
         "",
         f"**Núspá {rep['nowcast_month']} (m/m):** {rep['nowcast_mm']:+.2f}%  ",
         f"**12-mánaða verðbólga / 12-month inflation:** {rep['yy_12m']:.1f}%  "
@@ -253,9 +258,11 @@ def to_markdown(rep: dict) -> str:
         lines.append("_Breakeven slot óupppfyllt — keyra `lanamal.update_breakeven_slot()`._")
     else:
         lines.append(f"- Módel {mvb['model_horizon_yrs']:.0f}-ára meðalverðbólga / "
-                     f"{mvb['model_horizon_yrs']:.0f}yr avg: {mvb['model_avg']:.2f}%  ")
+                     f"{mvb['model_horizon_yrs']:.0f}yr avg: {mvb['model_avg']:.2f}%  "
+                     f"_(gögn til {rep['last_m']})_")
         lines.append(f"- Markaðs-verðbólguálag (RIKB−RIKS), "
-                     f"~{mvb['breakeven_horizon_yrs']:.0f}á / breakeven: {mvb['breakeven']:.2f}%  ")
+                     f"~{mvb['breakeven_horizon_yrs']:.0f}á / breakeven: {mvb['breakeven']:.2f}%  "
+                     f"_(markaður {pd.Timestamp(mvb['breakeven_date']):%Y-%m-%d})_")
         lines.append(f"- Fleygur / wedge (álag − módel): {mvb['implied_wedge']:+.2f}pp "
                      "_(álag ber áhættu- og skortsálag / breakeven carries risk & "
                      "scarcity premia — þar liggur h=3–12 forskotið)_")
@@ -272,10 +279,11 @@ def to_markdown(rep: dict) -> str:
         if at:
             lines += ["", "Greiningaraðilar — ársspá kortlögð á sjóndeildarhring / analyst "
                       "annual forecasts by years-ahead:", "",
-                      "| Aðili / Source | Ár / Year | Sjóndeild (ár) | Spá y/y (%) |",
-                      "|---|---|---|---|"]
+                      "| Aðili / Source | Spá gerð / Made | Ár / Year | Sjóndeild (ár) | Spá y/y (%) |",
+                      "|---|---|---|---|---|"]
             for a in at:
-                lines.append(f"| {a['source']} | {a['year']} | {a['horizon_yrs']} | {a['yoy_pct']:.1f} |")
+                lines.append(f"| {a['source']} | {pd.Timestamp(a['forecast_date']):%Y-%m} | "
+                             f"{a['year']} | {a['horizon_yrs']} | {a['yoy_pct']:.1f} |")
 
     an = rep.get("analysts")
     lines += ["", "## Módel vs greiningaraðilar / Model vs bank analysts", ""]
@@ -285,9 +293,10 @@ def to_markdown(rep: dict) -> str:
         cur = an["current"]
         if cur:
             lines.append(f"**Næsti print {cur['month']} (m/m):**  ")
-            lines.append(f"- Módel / model: {cur['model']:+.2f}%  ")
+            lines.append(f"- Módel / model: {cur['model']:+.2f}% _(gögn til {rep['last_m']})_  ")
             for a in cur["analysts"]:
-                lines.append(f"- {a['source']}: {a['mm_pct']:+.2f}% (y/y {a['yoy_pct']:.1f}%)  ")
+                made = f" _(spá {pd.Timestamp(a['made_on']):%Y-%m-%d})_" if a.get("made_on") is not None else ""
+                lines.append(f"- {a['source']}: {a['mm_pct']:+.2f}% (y/y {a['yoy_pct']:.1f}%){made}  ")
             lines.append(f"- Samhljóða / consensus: {cur['consensus_mm']:+.2f}%  "
                          f"→ módel − consensus: {cur['model_minus_consensus']:+.2f}pp")
         if an["track"] is not None and len(an["track"]):

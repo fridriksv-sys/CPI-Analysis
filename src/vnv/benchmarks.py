@@ -127,8 +127,8 @@ def analyst_comparison(head, model_nowcast: float, nowcast_month) -> dict | None
     up = fc[fc.manudur == nowcast_month]
     current = None
     if not up.empty:
-        rows = [{"source": r.source, "mm_pct": r.mm_pct, "yoy_pct": r.yoy_pct}
-                for r in up.itertuples()]
+        rows = [{"source": r.source, "mm_pct": r.mm_pct, "yoy_pct": r.yoy_pct,
+                 "made_on": r.forecast_date} for r in up.itertuples()]
         cons = float(up.mm_pct.mean())
         current = {"month": nowcast_month, "model": model_nowcast,
                    "analysts": rows, "consensus_mm": cons,
@@ -171,7 +171,8 @@ def model_vs_breakeven(model_term: dict):
     be = load_breakeven()
     if be.empty or not model_term:
         return None
-    latest = be[be.date == be.date.max()].sort_values("horizon_yrs")
+    be_date = be.date.max()
+    latest = be[be.date == be_date].sort_values("horizon_yrs")
     row = latest.iloc[0]                       # shortest breakeven (~4y)
     be_h = float(row.horizon_yrs)
     myr = min(model_term, key=lambda y: abs(y - be_h))   # nearest model term (3y)
@@ -179,6 +180,7 @@ def model_vs_breakeven(model_term: dict):
     breakeven = float(row.breakeven_pct)
     return {"model_avg": model_avg, "model_horizon_yrs": float(myr),
             "breakeven": breakeven, "breakeven_horizon_yrs": be_h,
+            "breakeven_date": be_date,
             "implied_wedge": breakeven - model_avg,
             "model_term": [{"horizon_yrs": float(y), "avg_infl": float(v)}
                            for y, v in sorted(model_term.items())],

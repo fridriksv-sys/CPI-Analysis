@@ -62,7 +62,8 @@ name_map = latest.loc[models.COMPONENTS, "heiti"].str.slice(0, 40)
 
 st.title("Vísitala neysluverðs — spálíkan")
 st.caption(f"Nýjasta birting: {last_m} · VNV {idx_hist.iloc[-1]:.1f} · "
-           f"12M verðbólga {head[('CPI', 'change_A')].iloc[-1]:.1f}%")
+           f"12M verðbólga {head[('CPI', 'change_A')].iloc[-1]:.1f}% · "
+           f"spá gerð {pd.Timestamp.today():%Y-%m-%d} (gögn til {last_m})")
 
 tab_rep, tab_diag = st.tabs(["Skýrsla", "Gögn & gæði"])
 
@@ -285,9 +286,10 @@ with tab_rep:
         cc = mvb["curve"]; term = mvb["model_term"]
         k1, k2, k3 = st.columns(3)
         k1.metric(f"Módel {mvb['model_horizon_yrs']:.0f}-ára meðalverðbólga",
-                  f"{mvb['model_avg']:.2f}%")
+                  f"{mvb['model_avg']:.2f}%", help=f"gögn til {last_m}")
         k2.metric(f"Markaðsálag (~{mvb['breakeven_horizon_yrs']:.0f}á)",
-                  f"{mvb['breakeven']:.2f}%")
+                  f"{mvb['breakeven']:.2f}%",
+                  help=f"markaður {pd.Timestamp(mvb['breakeven_date']):%Y-%m-%d}")
         k3.metric("Fleygur (álag − módel)", f"{mvb['implied_wedge']:+.2f}pp")
         hs = [r["horizon_yrs"] for r in cc]; be = [r["breakeven_pct"] for r in cc]
         mh = [t["horizon_yrs"] for t in term]; mv = [t["avg_infl"] for t in term]
@@ -316,6 +318,22 @@ with tab_rep:
                    "model sees stickier 1-year inflation than both banks and the market (rent "
                    "persistence). Bank forecasts update ~2×/yr — see dates in the table.")
 
+        # Fair comparison: when was each prediction made / what information did it have
+        rows = [("Módel", f"gögn til {last_m}", f"{mvb['model_avg']:.2f}% (3ár meðal)")]
+        rows.append(("Markaður (breakeven)", f"{pd.Timestamp(mvb['breakeven_date']):%Y-%m-%d}",
+                     f"{mvb['breakeven']:.2f}% (~{mvb['breakeven_horizon_yrs']:.0f}ár)"))
+        for a in (mvb.get("analyst_term") or []):
+            rows.append((f"{a['source']} (ársspá {a['year']})",
+                         f"{pd.Timestamp(a['forecast_date']):%Y-%m}",
+                         f"{a['yoy_pct']:.1f}% ({a['horizon_yrs']}ár fram)"))
+        st.markdown("**Hvenær spáin var gerð — til sanngjarns samanburðar / when each was made:**")
+        st.dataframe(pd.DataFrame(rows, columns=["Spá / Forecast", "Gerð / Made", "Gildi / Value"]),
+                     width="stretch", hide_index=True)
+        st.caption("Módel, markaður og Peningamál eru öll ~núverandi (ágúst 2026); ársspár bankanna "
+                   "eru eldri (uppfærðar ~2x á ári) og endurspegla ekki nýjustu hækkun verðbólgu. / "
+                   "Model, market and Peningamál are all ~current; the banks' annual forecasts are "
+                   "older and predate the recent inflation pickup — read them with that in mind.")
+
     # --- 5) Model vs bank analysts ---------------------------------------
     st.header("5 · Módel vs greiningaraðilar")
     an = rep.get("analysts")
@@ -327,9 +345,12 @@ with tab_rep:
         if cur:
             st.markdown(f"**Næsti print {cur['month']} — spár (m/m):**")
             cols = st.columns(len(cur["analysts"]) + 2)
-            cols[0].metric("Módel", f"{cur['model']:+.2f}%")
+            cols[0].metric("Módel", f"{cur['model']:+.2f}%", help=f"gögn til {last_m}")
             for i, a in enumerate(cur["analysts"], start=1):
-                cols[i].metric(a["source"], f"{a['mm_pct']:+.2f}%", help=f"y/y {a['yoy_pct']:.1f}%")
+                made = (f" · spá {pd.Timestamp(a['made_on']):%Y-%m-%d}"
+                        if a.get("made_on") is not None else "")
+                cols[i].metric(a["source"], f"{a['mm_pct']:+.2f}%",
+                               help=f"y/y {a['yoy_pct']:.1f}%{made}")
             cols[-1].metric("Samhljóða", f"{cur['consensus_mm']:+.2f}%",
                             f"{cur['model_minus_consensus']:+.2f}pp vs módel")
             st.caption("Bankagreiningar keyra sömu opinberu gögn og módelið (eldsneyti, HMS, "
