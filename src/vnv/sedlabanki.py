@@ -20,7 +20,9 @@ from datetime import date, timedelta
 import pandas as pd
 import requests
 
-from .px_client import RAW_DIR
+from pathlib import Path
+
+from .px_client import RAW_DIR, REPO_ROOT
 
 API = "https://sedlabanki.is/api/rate/csv"
 GENGISVISITALA = "4118"
@@ -61,13 +63,27 @@ def _midmonth_value(year: int, month: int) -> float | None:
     return None
 
 
+# Committed seed so a fresh deploy (e.g. Streamlit Cloud) starts instantly instead
+# of making ~80 sequential API calls. Refreshed by save_fx_seed() and committed.
+SEED = REPO_ROOT / "data" / "fx" / "gengisvisitala_monthly.csv"
+
+
+def _read_fx_csv(path: Path) -> pd.Series:
+    s = pd.read_csv(path)
+    return pd.Series(s.gengisvisitala.values,
+                     index=pd.PeriodIndex(s.manudur, freq="M"), name="gengisvisitala")
+
+
 def load_fx(use_cache: bool = True) -> pd.Series:
-    """Monthly ISK gengisvísitala (mid-collection-window sample), indexed by month."""
+    """Monthly ISK gengisvísitala (mid-collection-window sample), indexed by month.
+
+    Order: live cache (fresh, local) -> committed seed (instant, cloud) -> fetch.
+    """
     cache = RAW_DIR / "sedlabanki_gengisvisitala_monthly.csv"
     if use_cache and cache.exists():
-        s = pd.read_csv(cache)
-        return pd.Series(s.gengisvisitala.values,
-                         index=pd.PeriodIndex(s.manudur, freq="M"), name="gengisvisitala")
+        return _read_fx_csv(cache)
+    if use_cache and SEED.exists():
+        return _read_fx_csv(SEED)
 
     today = date.today()
     rows = []
@@ -89,3 +105,16 @@ def load_fx(use_cache: bool = True) -> pd.Series:
 def fx_mm(use_cache: bool = True) -> pd.Series:
     """m/m % change of the ISK NEER (positive = depreciation)."""
     return (load_fx(use_cache=use_cache).pct_change() * 100).rename("fx_mm")
+
+
+def save_fx_seed(use_cache: bool = False) -> str:
+    """Fetch the monthly FX series and write the committed seed (data/fx/).
+
+    Run before committing so a fresh deploy starts instantly:
+      .venv\\Scripts\\python.exe -c "from vnv import sedlabanki; sedlabanki.save_fx_seed()"
+    """
+    s = load_fx(use_cache=use_cache)
+    SEED.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"manudur": s.index.astype(str), "gengisvisitala": s.values}).to_csv(
+        SEED, index=False, encoding="utf-8")
+    return str(SEED)

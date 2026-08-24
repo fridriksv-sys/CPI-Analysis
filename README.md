@@ -32,6 +32,23 @@ Notebooks are committed **with outputs** so they read like a report. To re-run:
 .venv\Scripts\python -m streamlit run streamlit_app.py
 ```
 
+### Deploying (Streamlit Community Cloud)
+
+Deploy as a **public app from the private repo** — public apps are unlimited on
+the free tier (only private apps are capped), the source stays private, and the
+running app is what's shared. To keep it access-controlled without using the
+private slot, set an **`APP_PASSWORD`** secret in the app's *Settings → Secrets*:
+the app then shows a password gate (`_password_gate()` in `streamlit_app.py`). With
+no secret set (e.g. locally) it's open. Never commit a secret — `.streamlit/
+secrets.toml` is git-ignored.
+
+The app needs **no other secrets**: every runtime source is a public API (Hagstofa,
+lanamal.is, Seðlabanki, HMS, FAO, Gasvaktin) plus committed data. First load is
+instant — the FX series ships as a committed seed (`data/fx/gengisvisitala_monthly.csv`,
+refresh with `sedlabanki.save_fx_seed()`); the breakeven refreshes live on load.
+The local collection feeds (airfares, groceries) can't run on Cloud, so they show
+as "collecting" there and advance only when you push updated data.
+
 Two tabs. **Skýrsla** (the report, main) reads top to bottom: (1) next month's
 CPI, (2) the 36-month trend with MinT band, (3) each underlying with its trend
 chart + method, (4) model vs breakeven, (5) model vs bank analysts, (6) model vs

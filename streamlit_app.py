@@ -20,6 +20,37 @@ from vnv import airfares, blocks, fuel, groceries, ingest, models, nowcast, reco
 
 st.set_page_config(page_title="VNV spá", page_icon="📈", layout="wide")
 
+
+def _password_gate():
+    """Gate the app when an APP_PASSWORD secret is set (Streamlit Cloud).
+
+    Lets the app be deployed as a PUBLIC app (unlimited on the free tier) while
+    only people with the password can view it. With no secret set (e.g. running
+    locally) the app is open. The password lives in Streamlit secrets, never in
+    the repo.
+    """
+    try:
+        expected = st.secrets.get("APP_PASSWORD")
+    except Exception:
+        expected = None
+    if not expected:
+        return
+    if st.session_state.get("_authed") is True:
+        return
+    st.title("Vísitala neysluverðs — spálíkan")
+    pw = st.text_input("Lykilorð / Password", type="password",
+                       help="Aðgangur fyrir viðurkennda notendur.")
+    if pw == "":
+        st.stop()
+    if pw != expected:
+        st.error("Rangt lykilorð / wrong password.")
+        st.stop()
+    st.session_state["_authed"] = True
+    st.rerun()
+
+
+_password_gate()
+
 C = {"blue": "#0072B2", "orange": "#E69F00", "green": "#009E73",
      "red": "#D55E00", "sky": "#56B4E9", "black": "#222222"}
 plt.rcParams.update({
